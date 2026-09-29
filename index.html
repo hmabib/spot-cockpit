@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SPOT Cockpit — Pilotage quotidien AGL</title>
-<meta name="description" content="Outil de pilotage quotidien SPOT — 100% local, alertes, performance COM, criticité. Africa Global Logistics.">
+<meta name="description" content="Outil de pilotage quotidien SPOT — alertes, performance COM, criticité. Africa Global Logistics.">
 <link rel="icon" href="assets/agl-logo.png">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -15,12 +15,12 @@
     <img src="assets/agl-logo.png" alt="AGL Africa Global Logistics">
     <h1>SPOT COCKPIT<small>Pilotage quotidien</small></h1>
   </div>
-  <div class="local-badge"><span class="local-dot"></span><span><b>100% local</b> — aucune donnée envoyée.<br><span id="storageInfo">Stockage : mémoire + IndexedDB</span></span></div>
   <nav class="nav" id="mainNav">
     <button class="nav-btn active" data-view="pilotage"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Pilotage mois</button>
     <button class="nav-btn" data-view="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Vue d'ensemble</button>
     <button class="nav-btn" data-view="alertes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Alertes <span class="count" id="navAlertCount">0</span></button>
     <button class="nav-btn" data-view="dossiers"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Dossiers</button>
+    <button class="nav-btn" data-view="epingles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>Épinglés <span class="count" id="navPinCount">0</span></button>
     <button class="nav-btn" data-view="perfs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>Performance COM</button>
     <button class="nav-btn" data-view="bu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Vision BU / Section</button>
     <button class="nav-btn" data-view="admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Administration</button>
@@ -42,6 +42,7 @@
       <button class="btn small" id="btnPlus1" title="Jour suivant">+1j</button>
       <button class="btn primary" id="btnImport">📤 Charger Excel</button>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="sr">
+      <button class="btn" id="btnCadre" title="Cadrer un rapport : périmètre COM / métier / alertes / dates, puis Excel mis en forme ou Word structuré">🧭 Rapport</button>
       <button class="btn" id="btnExport">⬇ Export</button>
       <button class="btn ghost" id="btnReset" title="Effacer les données locales">🗑</button>
     </div>
@@ -168,6 +169,17 @@
       </div>
     </section>
 
+    <!-- EPINGLES -->
+    <section class="view" id="view-epingles">
+      <div class="filters" id="pinFilters">
+        <div class="f-field"><label>Recherche (n°, COM, client…)</label><input id="pinSearch" placeholder="n° dossier, client, COM…"></div>
+        <div class="f-field"><label>Tri</label><select id="pinSort"><option value="score">Score criticité ↓</option><option value="eta">Retard ETA ↓</option><option value="dossier">N° dossier A→Z</option></select></div>
+        <div class="f-field"><label>Exports Excel</label><div style="display:flex;gap:6px"><button class="btn small" id="pinExportSel">⬇ Sélection (.xlsx)</button><button class="btn small" id="pinExportAll">⬇ Tous (.xlsx)</button><button class="btn small ghost" id="pinClearSel">Effacer sélection</button></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>📌 Dossiers épinglés par la direction <span id="pinCount" class="pill info">0</span></h3><span class="hint">Cochez, notez, exportez — épingles et notes restent sur ce poste • survol d'une ligne = commentaires complets</span></div>
+      <div class="table-wrap"><table id="pinTable"><thead><tr><th></th><th></th><th>N° dossier</th><th>COM</th><th>Client</th><th>Criticité</th><th>ETA / Délai</th><th>Étape</th><th style="min-width:220px">Note direction</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
     <!-- PERFS -->
     <section class="view" id="view-perfs">
       <div class="kpi-grid" id="perfKpis" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -221,26 +233,49 @@
       <div class="card"><div class="card-h"><h3>📘 Méthodologie — mapping, délais, alertes, criticité</h3></div><div class="card-b" id="methodoBody"></div></div>
     </section>
 
-    <div class="footer-note">🔒 <b>Données 100% locales :</b> Excel lu dans le navigateur (SheetJS), stocké en <span class="kbd">IndexedDB</span> + préférences en <span class="kbd">localStorage</span>. Aucun envoi réseau. Déploiement GitHub + Vercel = hébergement statique uniquement. • Règles croisées des 4 captures : rouge = retard / inversion / stagnation &gt; SLA. • Date de pilotage modifiable en haut — tout est recalculé.</div>
+    <div class="footer-note">Règles : rouge = retard / inversion / stagnation &gt; SLA. • Date de pilotage modifiable en haut — tout est recalculé.</div>
   </div>
 </div>
 
 <!-- Drawer détail -->
-<div class="drawer" id="drawer"><div class="drawer-h"><div style="flex:1"><div id="dCrit"></div><h3 id="dTitle" style="margin:6px 0">Dossier</h3><div id="dSub" style="font-size:12px;color:#475569"></div></div><button class="btn small" id="dClose">✕</button></div><div class="drawer-b" id="dBody"></div></div>
+<div class="drawer" id="drawer"><div class="drawer-h"><div style="flex:1"><div id="dCrit"></div><h3 id="dTitle" style="margin:6px 0">Dossier</h3><div id="dSub" style="font-size:12px;color:#475569"></div></div><button class="btn small" id="dPin" title="Épingler ce dossier (reste en local)">☆ Épingler</button><button class="btn small" id="dClose">✕</button></div><div class="drawer-b" id="dBody"></div></div>
 
 <!-- Modal mapping -->
 <div class="modal-back" id="mapBack"><div class="modal"><div class="modal-h"><h3 style="margin:0">🧭 Mapping intelligent du fichier</h3><span class="hint" style="color:#64748b;font-size:12px">Vérifiez la correspondance — enregistrée en local</span><button class="btn small" id="mapClose" style="margin-left:auto">✕</button></div><div class="modal-b"><p style="font-size:13px;color:#334155">Colonnes détectées avec normalisation (accents/casse/espaces) + dictionnaire de synonymes. Ajustez si besoin puis <b>Valider</b>.</p><div class="table-wrap"><table class="map-table" id="mapTable"><thead><tr><th>Champ SPOT</th><th>Colonne fichier</th><th>Confiance</th></tr></thead><tbody></tbody></table></div><div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end"><button class="btn ghost" id="mapCancel">Ignorer</button><button class="btn primary" id="mapValid">✅ Valider & analyser</button></div></div></div></div>
 
 <!-- Modal e-mail situation COM -->
 <div class="modal-back" id="mailBack"><div class="modal"><div class="modal-h"><h3 style="margin:0">✉️ Situation COM — e-mail prêt à envoyer</h3><button class="btn small" id="mailClose" style="margin-left:auto">✕</button></div><div class="modal-b">
-<p style="font-size:13px;color:#334155">100% local : l'app prépare l'e-mail (objet + corps + CSV à joindre). Cliquez <b>Ouvrir dans ma messagerie</b>, joignez le CSV téléchargé, envoyez.</p>
+<p style="font-size:13px;color:#334155">L'app prépare l'e-mail (objet + corps + CSV à joindre). Cliquez <b>Ouvrir dans ma messagerie</b>, joignez le CSV téléchargé, envoyez.</p>
 <div class="f-field"><label>Destinataire(s)</label><input id="mailTo" placeholder="prenom.nom@aglgroup.com"></div>
 <div class="f-field" style="margin-top:8px"><label>Objet</label><input id="mailSubject"></div>
 <div class="f-field" style="margin-top:8px"><label>Corps</label><textarea id="mailBody" rows="14" style="width:100%;border:1px solid var(--agl-line);border-radius:10px;padding:10px;font-size:12.5px"></textarea></div>
 <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap"><button class="btn ghost" id="mailCopy">📋 Copier le corps</button><button class="btn" id="mailCsv">⬇ Télécharger CSV du COM</button><button class="btn primary" id="mailOpen">📧 Ouvrir dans ma messagerie</button></div>
 </div></div></div>
 
+<!-- Modal cadrage de rapport -->
+<div class="modal-back" id="cadreBack"><div class="modal" style="max-width:920px"><div class="modal-h"><h3 style="margin:0">🧭 Cadrage du rapport — périmètre, contenu, export</h3><button class="btn small" id="cadreClose" style="margin-left:auto">✕</button></div><div class="modal-b">
+  <div class="filters" style="grid-template-columns:repeat(4,1fr)">
+    <div class="f-field"><label>COM (1 ou + ; vide = tous)</label><select id="cadreCom" multiple size="5"></select></div>
+    <div class="f-field"><label>Métier</label><select id="cadreMetier"></select></div>
+    <div class="f-field"><label>Types d'alerte (1 ou + ; vide = tous)</label><select id="cadreAlerts" multiple size="5"></select></div>
+    <div class="f-field"><label>Criticité</label><select id="cadreCrit"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>OK</option></select></div>
+    <div class="f-field"><label>Période ETA (du … au …)</label><div style="display:flex;gap:6px"><input type="date" id="cadreFrom" style="width:100%"><input type="date" id="cadreTo" style="width:100%"></div></div>
+    <div class="f-field"><label>Mois / Année (ETA)</label><div style="display:flex;gap:6px"><select id="cadreMonth" style="width:100%"><option value="">Tous</option></select><select id="cadreYear" style="width:100%"><option value="">Toutes</option></select></div></div>
+    <div class="f-field"><label>Titre du rapport</label><input id="cadreTitle" value="Rapport de pilotage SPOT"></div>
+    <div class="f-field"><label>Logo (optionnel)</label><div style="display:flex;gap:6px;align-items:center"><input type="file" id="cadreLogo" accept="image/*" class="sr"><button class="btn small" id="cadreLogoBtn">🖼 Choisir…</button><span id="cadreLogoName" style="font-size:11px;color:#64748b">logo AGL intégré</span></div></div>
+  </div>
+  <div class="footer-note" id="cadreInfo">—</div>
+  <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn ghost" id="cadreApercu">👁 Aperçu</button>
+    <button class="btn" id="cadreXlsx">📊 Excel données (.xlsx)</button>
+    <button class="btn" id="cadreXls">🎨 Excel mis en forme (.xls)</button>
+    <button class="btn primary" id="cadreWord">📄 Word structuré (.doc)</button>
+  </div>
+  <div id="cadrePreview" style="display:none;margin-top:12px;border:1px solid var(--agl-line);border-radius:10px;padding:12px;max-height:340px;overflow:auto;background:#fff"></div>
+</div></div></div>
+
 <div class="toast-wrap" id="toasts"></div>
+<div id="tip" role="tooltip"></div>
 
 <script src="app.js"></script>
 </body>

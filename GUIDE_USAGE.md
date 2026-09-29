@@ -24,6 +24,20 @@ La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Crit
 ## 3bis. Dashboard Pilotage du mois (accueil, simple et clair)
 Vue d'accueil centrée sur **le mois** (sélecteur + ← → + *Mois du jour J*, défaut = mois du jour J) avec ses propres filtres **COM / Métier / Mois / Année / Criticité** (synchronisés avec la barre globale) + **filtres de dates : mois/année RTA, période ETA du…au…** : 6 KPIs du mois, 4 sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout est cliquable** : un clic applique les filtres et ouvre Alertes, Dossiers ou la fiche.
 
+## 3ter. Épinglés direction + note du directeur
+- **Épingler** : ★ dans la ligne Dossiers, ou bouton **☆ Épingler** dans la fiche détaillée. Le badge du menu affiche le nombre.
+- Onglet **Épinglés** : recherche, tri (score / retard ETA / n°), **cases à cocher** pour la sélection, **note du directeur** éditable par ligne (enregistrée en local), export Excel de la **sélection** ou de **tous** (colonne « Note direction » incluse).
+- Les épingles et notes **restent sur ce poste** et survivent au rechargement.
+
+## 3quater. 🧭 Cadrer un rapport (Excel / Word)
+Bouton **🧭 Rapport** en haut : choisissez le périmètre (**COM multiples**, métier, **types d'alerte multiples**, criticité, période ETA, mois/année), le **titre** et le **logo** (AGL intégré par défaut, ou votre fichier). Compteur de périmètre en direct, **👁 Aperçu**, puis :
+- **🎨 Excel mis en forme (.xls)** : en-tête coloré + logo, tableaux stylés ;
+- **📄 Word structuré (.doc)** : 6 sections numérotées (synthèse, criticité, par COM, top 15, alertes détaillées, épinglés) ;
+- **📊 Excel données (.xlsx)** : les dossiers du périmètre en table brute.
+
+## 3quinquies. Infobulle commentaires
+Survolez une ligne (Dossiers, Alertes, Épinglés, priorités, détail COM) : une info-bulle affiche les **commentaires 1–5 complets** et la **note direction** éventuelle.
+
 ## 4. Lire les indicateurs (Vue d'ensemble, déjà filtrés)
 - **Cartes KPI** : dossiers pilotés, critiques, ETA dépassée sans BAE, taux BAE/archivé, stagnation moyenne.
 - **Indicateurs de sévérité** (nouveau) : `🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK` — **cliquez** pour ouvrir les alertes filtrées (OK → dossiers sains).

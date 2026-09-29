@@ -3,7 +3,7 @@
 Outil de pilotage quotidien sur base de l'export **« Dossiers par COM »**, charte **AGL (Africa Global Logistics)**.
 **100% local : la donnée reste dans le navigateur.** Déployable **GitHub + Vercel** (statique uniquement).
 
-Nouveau (v5) : **dashboard Pilotage du mois** (accueil simple et clair, 100% cliquable), mentions latérales supprimées.
+Nouveau (v8) : **Épinglés direction** (page dédiée, notes du directeur, export Excel), **outil de cadrage de rapport** (🧭 Rapport : périmètre COM/métier/alertes/dates → Excel mis en forme ou Word structuré, logo), **infobulle des commentaires** au survol des lignes, exports **sans plafond de volume**.
 
 ## 1. Démarrage (2 min)
 
@@ -54,6 +54,9 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 - **Vision BU** : par Métier/Sous-métier, top clients à risque, matrice Métier × étape.
 - **Administration** : jour J modifiable (+ Auj./−1j/+1j), SLA, seuils criticité et ETA/RTA, activation/sévérité/poids/seuil/couleur par alerte, couleurs des sévérités. Sauvegarde locale, recalcul instantané.
 - **Guide d'usage** : onglet in-app + `GUIDE_USAGE.md` (rituel 10 min).
+- **Épinglés** : épinglez un dossier depuis **Dossiers (★)** ou sa fiche (**☆ Épingler**) ; page dédiée avec recherche, tri, **cases à cocher**, **note du directeur** (locale), export Excel de la sélection ou de tout, badge dans le menu.
+- **🧭 Rapport (cadrage)** : modal de cadrage — COM (multi), métier, **types d'alerte (multi)**, criticité, période ETA, mois/année, titre, logo (AGL intégré ou fichier choisi) → **👁 Aperçu**, **📊 Excel (.xlsx)**, **🎨 Excel mis en forme (.xls, en-tête coloré + logo)**, **📄 Word structuré (.doc, 6 sections : synthèse, criticité, par COM, top 15, alertes détaillées, épinglés)**.
+- **Infobulle** : survolez une ligne (Dossiers, Alertes, Épinglés, tops, détail COM) → **commentaires complets + note direction** en info-bulle.
 - **Exports** : CSV/XLSX/JSON **intégraux (aucune troncature, volume complet, compteur annoncé)** + par COM. Impression via navigateur.
 
 ## 5. Déploiement GitHub + Vercel (données toujours locales)
