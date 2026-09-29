@@ -100,7 +100,9 @@ const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date
 /* ---------- État ---------- */
 const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"" };
 /* Filtres globaux — appliqués à toutes les vues */
-const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"" };
+const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[] };
+/* visibilité multi-critères des types d'alerte : vide = tous visibles */
+function matchTypes(r){ return !F.alertTypes.length || r.alerts.some(a=>F.alertTypes.includes(a.c)); }
 const MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const ymLabel=ym=>{ if(!ym) return ""; const [y,m]=ym.split("-"); return `${MOIS[+m-1]||m} ${y}`; };
 const toast = m => { const t=document.createElement("div"); t.className="toast"; t.innerHTML=m; $("#toasts").appendChild(t); setTimeout(()=>t.remove(),4200); };
@@ -287,7 +289,7 @@ function setF(key,val){
   renderAll();
 }
 function clearAllFilters(){
-  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo="";
+  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[];
   ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear","pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear","pFrom","pTo"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
   $$("#sevChips .chip").forEach((x,i)=>x.classList.toggle("active",i===0));
@@ -298,6 +300,7 @@ function filteredMain(){
   const e1=$("#fEta1").value?new Date($("#fEta1").value+"T00:00:00"):null, e2=$("#fEta2").value?new Date($("#fEta2").value+"T00:00:00"):null;
   return S.enriched.filter(r=>{
     if(!matchGlobal(r)) return false;
+    if(!matchTypes(r)) return false;
     if(sm&&r.sousMetier!==sm) return false;
     if(cl&&r.client!==cl) return false; if(sc&&r.sousCompte!==sc) return false;
     if(st&&r.etapeKey!==st&&!(st==="archive"&&r.dateArchivage)) return false;
@@ -317,6 +320,7 @@ function filteredAlerts(){
   S.enriched.forEach(r=>r.alerts.forEach(a=>list.push({r,a})));
   return list.filter(({r,a})=>{
     if(type&&a.c!==type) return false;
+    if(F.alertTypes.length&&!F.alertTypes.includes(a.c)) return false;
     if(sev&&ALERT_DEFS[a.c].sev!==sev) return false;
     if(!matchGlobal(r, cLoc||F.com, mLoc||F.metier, moLoc||F.month, yLoc||F.year, F.crit)) return false;
     if(q){ const hay=norm([r.dossier,r.client,r.designation,r.com,r.comments,a.d].join(" ")); if(!hay.includes(q)) return false; }
@@ -436,7 +440,7 @@ function renderSevGrid(){
 }
 /* Cas préoccupants — top scores (filtres globaux appliqués), clic = drawer */
 function renderWorry(){
-  const top=baseFiltered().sort((a,b)=>b.score-a.score).slice(0,8);
+  const top=baseFiltered().filter(matchTypes).sort((a,b)=>b.score-a.score).slice(0,8);
   const q=norm($("#fSearch")?.value||"");
   $("#worryTable tbody").innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b> ${pill(r.crit)}</td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${r.alerts.map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:220px;font-size:12px">${hiComment((r.comments||"").slice(0,160),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
   $$("#worryTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
@@ -595,7 +599,8 @@ function renderComDetail(){
   const sevRows=[["Critique",crit],["Haute",haute],["Moyenne",moy],["OK",ok]];
   const mx=Math.max(1,...sevRows.map(x=>x[1]));
   sev.innerHTML=sevRows.map(([s,v])=>`<div class="bar-row"><span>${s}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mx*100)}%;background:${sevColor(s)}"></div></div><b>${v}</b></div>`).join("");
-  const byA={}; rows.forEach(r=>r.alerts.forEach(a=>{byA[a.c]=(byA[a.c]||0)+1;}));
+  const vrows=rows.filter(matchTypes);
+  const byA={}; vrows.forEach(r=>r.alerts.forEach(a=>{ if(!F.alertTypes.length||F.alertTypes.includes(a.c)) byA[a.c]=(byA[a.c]||0)+1; }));
   const arrA=Object.entries(byA).sort((a,b)=>b[1]-a[1]).slice(0,6); const mxA=Math.max(1,...arrA.map(x=>x[1]),1);
   al.innerHTML=arrA.length?arrA.map(([k,v])=>{const d=alertDef(k);return `<div class="bar-row"><span style="cursor:pointer" data-al="${k}" title="${esc(d.h)}"><b style="color:${d.c}">${k}</b> ${esc(d.t.slice(0,26))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxA*100)}%;background:${d.c}"></div></div><b>${v}</b></div>`;}).join(""):"<p style='color:#64748b'>Aucune alerte sur ce périmètre. ✔</p>";
   $$("#comDetailAlerts [data-al]").forEach(el=>el.onclick=()=>{ S.alertFilter=el.dataset.al; S.pageAlert=0; goto("alertes"); renderAlertTypes(); renderAlertTable(); });
@@ -612,10 +617,19 @@ function renderComDetail(){
   st.innerHTML=avgs.map(x=>x.avg==null
     ?`<div class="bar-row"><span>${esc(x.l)}</span><div class="bar-track"></div><b style="color:#94a3b8">—</b></div>`
     :`<div class="bar-row"><span>${esc(x.l)}${x.sla!=null&&x.avg>x.sla?' <b class="late">⚠</b>':""}<br><small style="color:#64748b">SLA ${x.sla??"—"}j • n=${x.n}</small></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.avg/mxS*100)}%;background:${x.sla!=null&&x.avg>x.sla?sevColor("Critique"):"#0f2a52"}"></div></div><b>${x.avg.toFixed(1)}j</b></div>`).join("");
-  const top=[...rows].sort((a,b)=>b.score-a.score).slice(0,8);
+  const top=[...vrows].sort((a,b)=>b.score-a.score).slice(0,8);
   const q=norm($("#fSearch")?.value||"");
   tb.innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:200px;font-size:12px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
   $$("#comDetailTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
+}
+/* Multi-sélecteur des types d'alerte visibles (toutes pages) */
+function renderAlertMulti(){
+  const btn=$("#gAlertBtn"), panel=$("#gAlertPanel");
+  if(!btn||!panel) return;
+  const sel=F.alertTypes;
+  btn.innerHTML=sel.length?`🚨 ${esc(sel.slice(0,3).join(", "))}${sel.length>3?` (+${sel.length-3})`:""} ▾`:"🚨 Toutes ▾";
+  btn.title=sel.length?`Types visibles : ${sel.join(", ")} — cliquez pour modifier`:"Choisir les types d'alerte visibles sur toutes les pages";
+  panel.innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<label class="msel-opt" title="${esc(d.h)}"><input type="checkbox" data-at="${k}" ${sel.includes(k)?"checked":""} ${d.on===false?"disabled":""}><span class="dot" style="background:${d.c}"></span><b>${k}</b><span style="flex:1">${esc(d.t)}</span>${d.on===false?'<small style="color:#94a3b8">OFF</small>':""}</label>`).join("")+`<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" id="msAll">Tous</button><button class="btn small ghost" id="msInv">Inverser</button></div>`;
 }
 function renderBU(){
   const E=baseFiltered();
@@ -642,7 +656,7 @@ function renderMethodo(){
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
-function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); }
+function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); }
 /* ---------- Administration ---------- */
 function renderAdmin(){
   $("#cfgPilot").value=$("#pilotDate").value||CFG.pilot;
@@ -667,6 +681,7 @@ function collectAdmin(){
 }
 function applyCfgAndRerender(msg){
   saveCfg(); applySevColors();
+  F.alertTypes=F.alertTypes.filter(k=>CFG.alerts[k]?.on!==false);
   $("#pilotDate").value=CFG.pilot;
   if(S.rows.length){ S.enriched=enrichAll(S.rows); fillSelects(); }
   renderAll(); renderMethodo(); renderGuide(); renderAdmin();
@@ -678,7 +693,7 @@ function renderGuide(){
   el.innerHTML=`
   <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code> (aucune donnée d'exemple : seuls vos dossiers s'affichent). Vérifiez le mapping auto (pastilles vertes), Valider. Données stockées <b>en local uniquement</b> (IndexedDB, intégralité des lignes).</div>
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
-  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
+  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité, <b>Types d'alerte 🚨</b>) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le sélecteur <b>🚨 Types d'alerte</b> permet de n'afficher qu'<b>un ou plusieurs types</b> (A1…A10, cases à cocher) dans les listes ; vide = tous visibles. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
   <div class="guide-step"><b>3bis. Dashboard Pilotage du mois (accueil).</b> Vue simple et claire centrée sur <b>le mois</b> (sélecteur + ← → + <i>Mois du jour J</i>) avec ses propres filtres <b>COM / Métier / Mois / Année / Criticité</b> (synchronisés avec la barre globale) + <b>filtres de dates : mois/année RTA, période ETA du…au…</b> : KPIs du mois, sévérités, COM du mois, étapes bloquantes, top priorités — <b>tout est cliquable</b> (un clic applique les filtres et ouvre la bonne vue).</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
   <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
@@ -878,6 +893,20 @@ async function init(){
   });});
   ["gCom","gMetier","gCrit","gMonth","gYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={gCom:"com",gMetier:"metier",gCrit:"crit",gMonth:"month",gYear:"year"}[id]; setF(k,el.value); });});
   $("#gClear").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
+  // multi-sélecteur types d'alerte (toutes pages)
+  $("#gAlertBtn").onclick=e=>{ e.stopPropagation(); $("#gAlertPanel").classList.toggle("open"); };
+  document.addEventListener("click",e=>{ const w=$("#gAlertWrap"); if(w&&!w.contains(e.target)) $("#gAlertPanel").classList.remove("open"); });
+  $("#gAlertPanel").addEventListener("change",e=>{
+    const cb=e.target.closest?e.target.closest("input[data-at]"):null; if(!cb) return;
+    const k=cb.dataset.at;
+    if(cb.checked){ if(!F.alertTypes.includes(k)) F.alertTypes.push(k); }
+    else { F.alertTypes=F.alertTypes.filter(x=>x!==k); }
+    S.pageMain=0; S.pageAlert=0; renderAll();
+  });
+  $("#gAlertPanel").addEventListener("click",e=>{
+    if(e.target.id==="msAll"){ F.alertTypes=[]; S.pageMain=0; S.pageAlert=0; renderAll(); }
+    if(e.target.id==="msInv"){ const all=Object.keys(CFG.alerts).filter(k=>CFG.alerts[k]?.on!==false); F.alertTypes=all.filter(k=>!F.alertTypes.includes(k)); S.pageMain=0; S.pageAlert=0; renderAll(); }
+  });
   $("#fSearch").addEventListener("input",()=>{S.pageMain=0;renderMain();});
   $("#alertSearch").addEventListener("input",()=>{S.pageAlert=0;renderAlertTable();});
   ["alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{S.pageAlert=0;renderAlertTable();});});

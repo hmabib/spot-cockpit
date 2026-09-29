@@ -119,6 +119,14 @@ a{color:var(--agl-blue)}
 /* listes intégrales scrollables (aucune troncature) */
 #comBars,#buBars,#clientBars,#comDetailMonths,#pilCom,#pilSteps{max-height:480px;overflow:auto;padding-right:4px}
 .pager select{border:1px solid var(--agl-line);border-radius:8px;padding:5px 7px;background:#fff;font-size:12.5px}
+/* multi-sélecteur types d'alerte */
+.msel{position:relative}
+.msel-panel{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--agl-line);border-radius:12px;box-shadow:var(--shadow);padding:8px;min-width:280px;max-width:330px;z-index:60;display:none;max-height:340px;overflow:auto}
+.msel-panel.open{display:block}
+.msel-opt{display:flex;gap:8px;align-items:center;padding:6px;border-radius:8px;font-size:12.5px;cursor:pointer}
+.msel-opt:hover{background:#f1f5fb}
+.msel-opt input{width:16px;height:16px;flex:none}
+.msel-opt b{min-width:26px}
 /* axe de positionnement dates */
 .daxis{position:relative;height:86px;background:#f8faff;border:1px solid #dfe6f0;border-radius:10px;margin:8px 0 4px;overflow:hidden}
 .daxis .jline{position:absolute;top:0;bottom:0;width:2px;background:var(--agl-red);z-index:2}

@@ -16,7 +16,8 @@
 - Chaque changement → toast `📅 Pilotage au … — tout recalculé`.
 
 ## 3. Filtres globaux — partout, tout le temps
-La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Criticité`) s'applique à **toutes les vues** : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le compteur affiche le périmètre filtré.
+La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Criticité / 🚨 Types d'alerte`) s'applique à **toutes les vues** : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le compteur affiche le périmètre filtré.
+- **🚨 Types d'alerte (multi-critères)** : cochez **un ou plusieurs types** (A1…A10) pour ne voir que ceux-là dans les listes (alertes, dossiers, tops, détail COM) ; vide = tous visibles. Boutons *Tous* / *Inverser*. Sur l'onglet Alertes, les cartes A1…A10 restent un raccourci de filtre simple (se combine avec la sélection).
 - Chaque vue ajoute ses filtres propres : recherche texte, délais, étapes, tri (Dossiers, Alertes).
 - *Effacer* (barre globale) réinitialise **tous** les filtres d'un coup.
 

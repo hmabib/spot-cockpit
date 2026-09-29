@@ -45,7 +45,7 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 
 ## 4. Vues & navigation
 
-- **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité` + compteur de périmètre — appliqués à toutes les vues.
+- **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité / 🚨 Types d'alerte multi-critères (1 ou +)` + compteur de périmètre — appliqués à toutes les vues.
 - **Pilotage du mois (accueil)** : dashboard simple — sélecteur de mois + ← → + *Mois du jour J*, **filtres COM/Métier/Mois/Année/Criticité synchronisés + filtres de dates (mois/année RTA, période ETA)**, 6 KPIs du mois, sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout cliquable** vers Alertes/Dossiers/fiches (filtres propagés).
 - **Vue d'ensemble** : 6 KPI + **4 indicateurs de sévérité cliquables** + 4 jauges SVG + COM en difficulté (cliquable) + étape bloquante + distribution délais + top alertes + **cas préoccupants cliquables**.
 - **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
