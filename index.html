@@ -90,6 +90,17 @@
           <div class="sev-grid" id="pilSev"></div>
         </div>
       </div>
+      <div class="filters" id="pilFilters" style="grid-template-columns:repeat(5,1fr);margin-top:12px" title="Mêmes filtres que la barre globale (synchronisés partout) + filtres de dates RTA et période ETA.">
+        <div class="f-field"><label>COM</label><select id="pCom"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Métier</label><select id="pMetier"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Mois (ETA)</label><select id="pMonth"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Année (ETA)</label><select id="pYear"><option value="">Toutes</option></select></div>
+        <div class="f-field"><label>Criticité</label><select id="pCrit"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>OK</option></select></div>
+        <div class="f-field"><label>Mois (RTA)</label><select id="pRtaMonth"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Année (RTA)</label><select id="pRtaYear"><option value="">Toutes</option></select></div>
+        <div class="f-field"><label>Période ETA (du … au …)</label><div style="display:flex;gap:6px"><input type="date" id="pFrom" style="width:100%"><input type="date" id="pTo" style="width:100%"></div></div>
+        <div class="f-field"><label>&nbsp;</label><button class="btn small ghost" id="pClearF">Effacer</button></div>
+      </div>
       <div class="panels" style="margin-top:12px">
         <div class="card"><div class="card-h"><h3>🔥 COM du mois</h3><span class="hint">Cliquez un COM → ses dossiers</span></div><div class="card-b"><div class="bars" id="pilCom"></div></div></div>
         <div class="card"><div class="card-h"><h3>⏱ Étapes bloquantes du mois</h3><span class="hint">Où s'accumulent les dossiers ?</span></div><div class="card-b"><div class="bars" id="pilSteps"></div></div></div>

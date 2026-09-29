@@ -100,7 +100,7 @@ const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date
 /* ---------- État ---------- */
 const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"" };
 /* Filtres globaux — appliqués à toutes les vues */
-const F = { com:"", metier:"", crit:"", month:"", year:"" };
+const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"" };
 const MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const ymLabel=ym=>{ if(!ym) return ""; const [y,m]=ym.split("-"); return `${MOIS[+m-1]||m} ${y}`; };
 const toast = m => { const t=document.createElement("div"); t.className="toast"; t.innerHTML=m; $("#toasts").appendChild(t); setTimeout(()=>t.remove(),4200); };
@@ -207,7 +207,8 @@ function enrichAll(rows){
     const crit = sc>=CFG.thCrit?"Critique": sc>=CFG.thHaute?"Haute": sc>=CFG.thMoy?"Moyenne":"OK";
     const comments=[r.com1,r.com2,r.com3,r.com4,r.com5].filter(x=>x&&String(x).trim()).join(" • ");
     const etaYM=r.dateETA?`${r.dateETA.getFullYear()}-${String(r.dateETA.getMonth()+1).padStart(2,"0")}`:"";
-    return {...r, delaiETA, delaiRTA, etape:etape.label, etapeKey, stagn, inv, alerts:al, score:sc, crit, comments, lastIdx, etaYM, etaYear:r.dateETA?String(r.dateETA.getFullYear()):"", etaMonth:r.dateETA?String(r.dateETA.getMonth()+1).padStart(2,"0"):""};
+    const rtaYM=r.dateRTA?`${r.dateRTA.getFullYear()}-${String(r.dateRTA.getMonth()+1).padStart(2,"0")}`:"";
+    return {...r, delaiETA, delaiRTA, etape:etape.label, etapeKey, stagn, inv, alerts:al, score:sc, crit, comments, lastIdx, etaYM, etaYear:r.dateETA?String(r.dateETA.getFullYear()):"", etaMonth:r.dateETA?String(r.dateETA.getMonth()+1).padStart(2,"0"):"", rtaYM, rtaYear:r.dateRTA?String(r.dateRTA.getFullYear()):""};
   });
 }
 
@@ -218,6 +219,8 @@ function uniqYear(){ const s=new Set(); S.enriched.forEach(r=>{ if(r.etaYear) s.
 function setSelect(el,v){ if(!el) return; el.value=v||""; }
 function fillSelects(){
   const coms=uniq("com"), mets=uniq("metier"), yms=uniqYM(), yrs=uniqYear();
+  const rtaYms=[...new Set(S.enriched.map(r=>r.rtaYM).filter(Boolean))].sort();
+  const rtaYrs=[...new Set(S.enriched.map(r=>r.rtaYear).filter(Boolean))].sort().reverse();
   const opt=(cur,vals,lbl)=>'<option value="">'+lbl+'</option>'+vals.map(v=>`<option value="${esc(v)}" ${v===cur?"selected":""}>${esc(v)}</option>`).join("");
   const optYM=cur=>'<option value="">Tous</option>'+yms.map(v=>`<option value="${v}" ${v===cur?"selected":""}>${esc(ymLabel(v))}</option>`).join("");
   // barre globale
@@ -245,6 +248,16 @@ function fillSelects(){
   /* mois du dashboard */
   const pm=$("#pilMonth");
   if(pm){ const cur=S.pilMonth; pm.innerHTML='<option value="">Tous les mois</option>'+yms.map(v=>`<option value="${v}" ${v===cur?"selected":""}>${esc(ymLabel(v))}</option>`).join(""); }
+  /* filtres du dashboard pilotage (miroirs + dates RTA/période) */
+  setSelect($("#pCom"),F.com); $("#pCom").innerHTML=opt(F.com,coms,"Tous");
+  setSelect($("#pMetier"),F.metier); $("#pMetier").innerHTML=opt(F.metier,mets,"Tous");
+  setSelect($("#pMonth"),F.month); $("#pMonth").innerHTML=optYM(F.month);
+  setSelect($("#pYear"),F.year); $("#pYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>`<option ${v===F.year?"selected":""}>${v}</option>`).join("");
+  setSelect($("#pCrit"),F.crit);
+  setSelect($("#pRtaMonth"),F.rtaMonth); $("#pRtaMonth").innerHTML='<option value="">Tous</option>'+rtaYms.map(v=>`<option value="${v}" ${v===F.rtaMonth?"selected":""}>${esc(ymLabel(v))}</option>`).join("");
+  setSelect($("#pRtaYear"),F.rtaYear); $("#pRtaYear").innerHTML='<option value="">Toutes</option>'+rtaYrs.map(v=>`<option ${v===F.rtaYear?"selected":""}>${v}</option>`).join("");
+  if($("#pFrom")) $("#pFrom").value=F.dFrom;
+  if($("#pTo")) $("#pTo").value=F.dTo;
 }
 /* Filtres globaux : toute vue = baseFiltered() */
 function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
@@ -255,13 +268,17 @@ function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
   if(mo&&r.etaYM!==mo) return false;
   if(y&&r.etaYear!==y) return false;
   if(cr&&r.crit!==cr) return false;
+  if(F.rtaMonth&&r.rtaYM!==F.rtaMonth) return false;
+  if(F.rtaYear&&r.rtaYear!==F.rtaYear) return false;
+  if(F.dFrom){ const d1=new Date(F.dFrom+"T00:00:00"); if(!r.dateETA||r.dateETA<d1) return false; }
+  if(F.dTo){ const d2=new Date(F.dTo+"T00:00:00"); if(!r.dateETA||r.dateETA>d2) return false; }
   return true;
 }
 function baseFiltered(){ return S.enriched.filter(r=>matchGlobal(r)); }
 /* écriture centralisée d'un filtre global + synchro des miroirs + rerendu */
 function setF(key,val){
   F[key]=val||"";
-  const map={com:["#gCom","#fCom"],metier:["#gMetier","#fMetier"],crit:["#gCrit","#fCrit"],month:["#gMonth","#fMonth"],year:["#gYear","#fYear"]};
+  const map={com:["#gCom","#fCom","#pCom"],metier:["#gMetier","#fMetier","#pMetier"],crit:["#gCrit","#fCrit","#pCrit"],month:["#gMonth","#fMonth","#pMonth"],year:["#gYear","#fYear","#pYear"],rtaMonth:["#pRtaMonth"],rtaYear:["#pRtaYear"]};
   (map[key]||[]).forEach(s=>setSelect($(s),F[key]));
   if(key==="com"&&$("#alertCom")) setSelect($("#alertCom"),F.com);
   if(key==="month"&&$("#alertMonth")) setSelect($("#alertMonth"),F.month);
@@ -270,8 +287,8 @@ function setF(key,val){
   renderAll();
 }
 function clearAllFilters(){
-  F.com=F.metier=F.crit=F.month=F.year="";
-  ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo="";
+  ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear","pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear","pFrom","pTo"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
   $$("#sevChips .chip").forEach((x,i)=>x.classList.toggle("active",i===0));
   renderAll();
@@ -662,7 +679,7 @@ function renderGuide(){
   <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code> (aucune donnée d'exemple : seuls vos dossiers s'affichent). Vérifiez le mapping auto (pastilles vertes), Valider. Données stockées <b>en local uniquement</b> (IndexedDB, intégralité des lignes).</div>
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
   <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
-  <div class="guide-step"><b>3bis. Dashboard Pilotage du mois (accueil).</b> Vue simple et claire centrée sur <b>le mois</b> (sélecteur + ← → + <i>Mois du jour J</i>) : KPIs du mois, sévérités, COM du mois, étapes bloquantes, top priorités — <b>tout est cliquable</b> (un clic applique le mois + le filtre et ouvre la bonne vue).</div>
+  <div class="guide-step"><b>3bis. Dashboard Pilotage du mois (accueil).</b> Vue simple et claire centrée sur <b>le mois</b> (sélecteur + ← → + <i>Mois du jour J</i>) avec ses propres filtres <b>COM / Métier / Mois / Année / Criticité</b> (synchronisés avec la barre globale) + <b>filtres de dates : mois/année RTA, période ETA du…au…</b> : KPIs du mois, sévérités, COM du mois, étapes bloquantes, top priorités — <b>tout est cliquable</b> (un clic applique les filtres et ouvre la bonne vue).</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
   <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
   <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement <b>complet</b> + <b>panneau détail</b> (KPIs, criticité, alertes dominantes, volume mensuel <b>complet</b>, <b>délais moyens entre étapes vs SLA</b>, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ e-mail.</div>
@@ -844,6 +861,10 @@ async function init(){
   $("#pilPrev").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),-1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
   $("#pilNext").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
   $("#pilJ").onclick=()=>{ S.pilMonth=pilotYM(); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); toast("📅 Mois du jour J : <b>"+ymLabel(S.pilMonth)+"</b>"); };
+  // filtres du dashboard (miroirs globaux + dates)
+  ["pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={pCom:"com",pMetier:"metier",pCrit:"crit",pMonth:"month",pYear:"year",pRtaMonth:"rtaMonth",pRtaYear:"rtaYear"}[id]; setF(k,el.value); });});
+  ["pFrom","pTo"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ F.dFrom=$("#pFrom").value; F.dTo=$("#pTo").value; S.pageMain=0; S.pageAlert=0; renderAll(); });});
+  $("#pClearF").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
   // mail modal
   $("#mailClose").onclick=()=>$("#mailBack").classList.remove("open");
   $("#mailCopy").onclick=()=>{ navigator.clipboard?.writeText($("#mailBody").value); toast("📋 Corps de l'e-mail copié"); };

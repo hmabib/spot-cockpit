@@ -21,7 +21,7 @@ La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Crit
 - *Effacer* (barre globale) réinitialise **tous** les filtres d'un coup.
 
 ## 3bis. Dashboard Pilotage du mois (accueil, simple et clair)
-Vue d'accueil centrée sur **le mois** (sélecteur + ← → + *Mois du jour J*, défaut = mois du jour J) : 6 KPIs du mois, 4 sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout est cliquable** : un clic applique le mois (+ le filtre) et ouvre Alertes, Dossiers ou la fiche.
+Vue d'accueil centrée sur **le mois** (sélecteur + ← → + *Mois du jour J*, défaut = mois du jour J) avec ses propres filtres **COM / Métier / Mois / Année / Criticité** (synchronisés avec la barre globale) + **filtres de dates : mois/année RTA, période ETA du…au…** : 6 KPIs du mois, 4 sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout est cliquable** : un clic applique les filtres et ouvre Alertes, Dossiers ou la fiche.
 
 ## 4. Lire les indicateurs (Vue d'ensemble, déjà filtrés)
 - **Cartes KPI** : dossiers pilotés, critiques, ETA dépassée sans BAE, taux BAE/archivé, stagnation moyenne.
