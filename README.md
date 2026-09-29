@@ -3,7 +3,7 @@
 Outil de pilotage quotidien sur base de l'export **« Dossiers par COM »**, charte **AGL (Africa Global Logistics)**.
 **100% local : la donnée reste dans le navigateur.** Déployable **GitHub + Vercel** (statique uniquement).
 
-Nouveau (v4) : **zéro limite d'affichage** (COM/métiers/clients/mois/matrice intégraux + 100→1000 lignes/page), **🗓 positionnement dates** (axe J±n par dossier + délais moyens par étape par COM vs SLA).
+Nouveau (v5) : **dashboard Pilotage du mois** (accueil simple et clair, 100% cliquable), mentions latérales supprimées.
 
 ## 1. Démarrage (2 min)
 
@@ -45,7 +45,8 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 
 ## 4. Vues & navigation
 
-- **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité` + compteur de périmètre — appliqués à la synthèse, aux alertes, aux dossiers, aux COM et à la BU.
+- **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité` + compteur de périmètre — appliqués à toutes les vues.
+- **Pilotage du mois (accueil)** : dashboard simple — sélecteur de mois + ← → + *Mois du jour J*, 6 KPIs du mois, sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout cliquable** vers Alertes/Dossiers/fiches (mois propagé).
 - **Vue d'ensemble** : 6 KPI + **4 indicateurs de sévérité cliquables** + 4 jauges SVG + COM en difficulté (cliquable) + étape bloquante + distribution délais + top alertes + **cas préoccupants cliquables**.
 - **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
 - **Dossiers** : filtres globaux + Sous-métier / Client / Sous-compte / Mois / Année / recherche textuelle / filtre délai / ETA du…au… / étape, tri, **pagination 100→1000 réglable**, fiche détail (timeline, **🗓 positionnement dates J±n**, **commentaires C1–C5 en bulles, mots-clés surlignés**).

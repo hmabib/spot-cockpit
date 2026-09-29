@@ -98,7 +98,7 @@ const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
 /* ---------- État ---------- */
-const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"overview", selCom:"" };
+const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"" };
 /* Filtres globaux — appliqués à toutes les vues */
 const F = { com:"", metier:"", crit:"", month:"", year:"" };
 const MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
@@ -242,6 +242,9 @@ function fillSelects(){
   setSelect($("#alertYear"),F.year); $("#alertYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>{const cur=$("#alertYear").value||F.year;return `<option ${v===cur?"selected":""}>${v}</option>`;}).join("");
   const n=baseFiltered().length;
   $("#gCount").textContent=n.toLocaleString("fr-FR")+" dossier"+(n>1?"s":"");
+  /* mois du dashboard */
+  const pm=$("#pilMonth");
+  if(pm){ const cur=S.pilMonth; pm.innerHTML='<option value="">Tous les mois</option>'+yms.map(v=>`<option value="${v}" ${v===cur?"selected":""}>${esc(ymLabel(v))}</option>`).join(""); }
 }
 /* Filtres globaux : toute vue = baseFiltered() */
 function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
@@ -393,7 +396,6 @@ function renderKPIs(){
   ];
   $("#gaugeGrid").innerHTML=g.map(x=>`<div class="gauge-card"><h4>${x.t}</h4>${gaugeSVG(x.p,x.c)}<p>${x.h}</p></div>`).join("");
   $("#navAlertCount").textContent=E.reduce((s,r)=>s+r.alerts.length,0);
-  $("#rowCountSide").textContent=S.enriched.length.toLocaleString("fr-FR")+" dossiers • "+fmtD(P);
   const gc=$("#gCount"); if(gc) gc.textContent=tot.toLocaleString("fr-FR")+" dossier"+(tot>1?"s":"")+" (filtres globaux)";
   renderSevGrid();
   renderWorry();
@@ -421,6 +423,60 @@ function renderWorry(){
   const q=norm($("#fSearch")?.value||"");
   $("#worryTable tbody").innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b> ${pill(r.crit)}</td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${r.alerts.map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:220px;font-size:12px">${hiComment((r.comments||"").slice(0,160),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
   $$("#worryTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
+}
+/* ---------- Dashboard Pilotage du mois (simple, 100% cliquable) ---------- */
+function pilotYM(){ const P=todayPilot(); return `${P.getFullYear()}-${String(P.getMonth()+1).padStart(2,"0")}`; }
+function ymShift(ym,d){ if(!ym) return pilotYM(); let [y,m]=ym.split("-").map(Number); m+=d; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} return `${y}-${String(m).padStart(2,"0")}`; }
+function pilRows(){ return baseFiltered().filter(r=>!S.pilMonth||r.etaYM===S.pilMonth); }
+/* propage le mois du dashboard vers les filtres globaux avant de naviguer */
+function withPilMonth(){ if(S.pilMonth) setF("month",S.pilMonth); }
+function renderPilotage(){
+  const E=pilRows();
+  const tot=E.length;
+  const crit=E.filter(r=>r.crit==="Critique").length, haute=E.filter(r=>r.crit==="Haute").length;
+  const bae=E.filter(r=>r.dateBAE).length, arch=E.filter(r=>r.dateArchivage).length;
+  const etaLate=E.filter(r=>r.delaiETA!=null&&r.delaiETA<0&&!r.dateBAE).length;
+  $("#pilTitle").textContent=S.pilMonth?ymLabel(S.pilMonth):"tous les mois";
+  const kpis=[
+    {l:"Dossiers du mois",v:tot,s:S.fileName?esc(S.fileName):"aucun fichier",c:"#0f2a52",go:()=>{withPilMonth();goto("dossiers");}},
+    {l:"Critiques",v:crit,s:`${tot?Math.round(crit/tot*100):0}% du mois`,c:sevColor("Critique"),go:()=>{withPilMonth();setF("crit","Critique");goto("dossiers");}},
+    {l:"Hautes",v:haute,s:`${tot?Math.round(haute/tot*100):0}% du mois`,c:sevColor("Haute"),go:()=>{withPilMonth();setF("crit","Haute");goto("dossiers");}},
+    {l:"ETA dépassée ss BAE",v:etaLate,s:"risque surestaries",c:"#e9730c",go:()=>{withPilMonth();setF("crit","");$("#fDelay").value="etaLate";S.pageMain=0;renderMain();goto("dossiers");}},
+    {l:"Taux BAE",v:(tot?Math.round(bae/tot*100):0)+"%",s:`${bae} dossiers`,c:"#2563eb"},
+    {l:"Taux archivé",v:(tot?Math.round(arch/tot*100):0)+"%",s:`${arch} clôturés`,c:"#12805c"},
+  ];
+  $("#pilKpis").innerHTML=kpis.map((k,i)=>`<button class="kpi" data-k="${i}" style="--kpi-c:${k.c};${k.go?"cursor:pointer":""};text-align:left;font-family:inherit" ${k.go?"":"disabled"}><label>${k.l}</label><strong>${k.v}</strong><span>${k.s}</span></button>`).join("");
+  $$("#pilKpis .kpi[data-k]").forEach(b=>{ const k=kpis[+b.dataset.k]; if(k.go) b.onclick=k.go; });
+  /* sévérités cliquables */
+  const groups=[["Critique","🔴"],["Haute","🟠"],["Moyenne","🟡"],["OK","🟢"]];
+  $("#pilSev").innerHTML=groups.map(([sev,ico])=>{
+    const n=E.filter(r=>r.crit===sev).length, col=sevColor(sev);
+    return `<button class="sev-card" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${n.toLocaleString("fr-FR")}</b></span><span style="font-size:18px;color:${col}">→</span></button>`;
+  }).join("");
+  $$("#pilSev .sev-card").forEach(b=>b.onclick=()=>{
+    withPilMonth();
+    if(b.dataset.sev==="OK"){ setF("crit","OK"); goto("dossiers"); return; }
+    S.sevFilter=b.dataset.sev;
+    $$("#sevChips .chip").forEach(x=>x.classList.toggle("active",(x.dataset.sev||"")===S.sevFilter));
+    goto("alertes"); renderAlertTypes(); renderAlertTable();
+  });
+  /* COM du mois */
+  const by={}; E.forEach(r=>{ const k=r.com||"(vide)"; (by[k]=by[k]||{n:0,sc:0,crit:0}); by[k].n++; by[k].sc+=r.score; by[k].crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0; });
+  const arr=Object.entries(by).map(([k,v])=>({k,...v,avg:v.sc/v.n,rate:v.crit/v.n})).sort((a,b)=>b.avg-a.avg);
+  const max=Math.max(1,...arr.map(a=>a.avg));
+  $("#pilCom").innerHTML=arr.length?arr.map(a=>`<div class="bar-row"><span><b style="cursor:pointer;color:#0f2a52" data-com="${esc(a.k)}">${esc(a.k)}</b><br><span style="color:#64748b">${a.n} dos. • ${Math.round(a.rate*100)}% alertés</span></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(a.avg/max*100)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#2563eb"}"></div></div><b>${a.avg.toFixed(0)}</b></div>`).join(""):(S.enriched.length?'<p style="color:#64748b">Aucun dossier ce mois-ci.</p>':'<div class="empty-state"><b>En attente de données</b>Chargez votre export Excel.</div>');
+  $$("#pilCom [data-com]").forEach(el=>el.onclick=()=>{ withPilMonth(); setF("com",el.dataset.com); goto("dossiers"); });
+  /* étapes du mois */
+  const labels={validation:"À ouvrir / Valid.",docs:"Docs complets",note:"Note détail",douane:"Enreg. douane",factDouane:"Fact. douane",bae:"BAE",mise:"Mise livr.",retour:"Retour livr.",factInt:"Fact. interv.",validFinal:"Valid. finale",archivage:"Archivé"};
+  const order=["validation","docs","note","douane","factDouane","bae","mise","retour","factInt","validFinal","archivage"];
+  const cnt={}; order.forEach(k=>cnt[k]=0);
+  E.forEach(r=>{ const k=r.lastIdx<0?"validation":r.dateArchivage?"archivage":STEPS[Math.min(r.lastIdx+1,10)].k; cnt[k]=(cnt[k]||0)+1; });
+  const mx=Math.max(1,...order.map(k=>cnt[k]));
+  $("#pilSteps").innerHTML=order.map(k=>`<div class="bar-row"><span>${labels[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(cnt[k]/mx*100)}%;background:${["bae","mise","retour"].includes(k)?sevColor("Critique"):k==="archivage"?sevColor("OK"):"#0f2a52"}"></div></div><b>${cnt[k]}</b></div>`).join("");
+  /* priorité du mois */
+  const top=[...E].sort((a,b)=>b.score-a.score).slice(0,10);
+  $("#pilTable tbody").innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b> ${pill(r.crit)}</td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${r.alerts.map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td></tr>`).join("")||(S.enriched.length?'<tr><td colspan="6"><div class="empty-state"><b>Rien à signaler ce mois-ci ✔</b></div></td></tr>':'<tr><td colspan="6"><div class="empty-state"><b>En attente de données</b>Chargez votre export Excel.</div></td></tr>');
+  $$("#pilTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function renderComBars(){
   const by={}; baseFiltered().forEach(r=>{ const k=r.com||"(vide)"; (by[k]=by[k]||{n:0,sc:0,crit:0}); by[k].n++; by[k].sc+=r.score; by[k].crit+= (r.crit==="Critique"||r.crit==="Haute")?1:0; });
@@ -569,7 +625,7 @@ function renderMethodo(){
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
-function renderAll(){ renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); }
+function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); }
 /* ---------- Administration ---------- */
 function renderAdmin(){
   $("#cfgPilot").value=$("#pilotDate").value||CFG.pilot;
@@ -605,7 +661,8 @@ function renderGuide(){
   el.innerHTML=`
   <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code> (aucune donnée d'exemple : seuls vos dossiers s'affichent). Vérifiez le mapping auto (pastilles vertes), Valider. Données stockées <b>en local uniquement</b> (IndexedDB, intégralité des lignes).</div>
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
-  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
+  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
+  <div class="guide-step"><b>3bis. Dashboard Pilotage du mois (accueil).</b> Vue simple et claire centrée sur <b>le mois</b> (sélecteur + ← → + <i>Mois du jour J</i>) : KPIs du mois, sévérités, COM du mois, étapes bloquantes, top priorités — <b>tout est cliquable</b> (un clic applique le mois + le filtre et ouvre la bonne vue).</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
   <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
   <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement <b>complet</b> + <b>panneau détail</b> (KPIs, criticité, alertes dominantes, volume mensuel <b>complet</b>, <b>délais moyens entre étapes vs SLA</b>, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ e-mail.</div>
@@ -656,7 +713,7 @@ function goto(v){
   S.activeView=v;
   $$(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   $$(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+v));
-  $("#viewTitle").textContent={overview:"Vue d'ensemble",alertes:"Alertes",dossiers:"Dossiers",perfs:"Performance COM",bu:"Vision BU / Section",admin:"Administration",guide:"Guide d'usage",methodo:"Méthodologie"}[v]||v;
+  $("#viewTitle").textContent={overview:"Vue d'ensemble",pilotage:"Pilotage du mois — dossiers du mois",alertes:"Alertes",dossiers:"Dossiers",perfs:"Performance COM",bu:"Vision BU / Section",admin:"Administration",guide:"Guide d'usage",methodo:"Méthodologie"}[v]||v;
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -681,6 +738,9 @@ async function ingest(headers, body, fileName){
     // applique mapping par chunks pour rester fluide
     const mapped=applyMapping(headers, body, mapping);
     S.rows=mapped; S.enriched=enrichAll(mapped);
+    /* dashboard : mois du jour J par défaut s'il existe dans les données */
+    const pym=pilotYM();
+    S.pilMonth=S.enriched.some(r=>r.etaYM===pym)?pym:"";
     fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide();
     try{ await IDB.put("dossiers",{fileName,rows:mapped}); $("#storageInfo").textContent=`Stockage : IndexedDB local ✓ (${mapped.length.toLocaleString("fr-FR")} lignes)`; }catch{ $("#storageInfo").textContent="Stockage : mémoire (navigateur saturé) — exports toujours intégraux"; }
     toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
@@ -779,6 +839,11 @@ async function init(){
   $("#cfgToday").onclick=()=>{ $("#cfgPilot").value=iso(new Date()); };
   $("#cfgReport").onclick=()=>{ $("#cfgPilot").value="2026-09-28"; };
   $("#guidePrint").onclick=()=>window.print();
+  // dashboard pilotage du mois
+  $("#pilMonth").onchange=e=>{ S.pilMonth=e.target.value; renderPilotage(); };
+  $("#pilPrev").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),-1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
+  $("#pilNext").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
+  $("#pilJ").onclick=()=>{ S.pilMonth=pilotYM(); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); toast("📅 Mois du jour J : <b>"+ymLabel(S.pilMonth)+"</b>"); };
   // mail modal
   $("#mailClose").onclick=()=>$("#mailBack").classList.remove("open");
   $("#mailCopy").onclick=()=>{ navigator.clipboard?.writeText($("#mailBody").value); toast("📋 Corps de l'e-mail copié"); };

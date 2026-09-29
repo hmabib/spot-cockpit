@@ -17,7 +17,8 @@
   </div>
   <div class="local-badge"><span class="local-dot"></span><span><b>100% local</b> — aucune donnée envoyée.<br><span id="storageInfo">Stockage : mémoire + IndexedDB</span></span></div>
   <nav class="nav" id="mainNav">
-    <button class="nav-btn active" data-view="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Vue d'ensemble</button>
+    <button class="nav-btn active" data-view="pilotage"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Pilotage mois</button>
+    <button class="nav-btn" data-view="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Vue d'ensemble</button>
     <button class="nav-btn" data-view="alertes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Alertes <span class="count" id="navAlertCount">0</span></button>
     <button class="nav-btn" data-view="dossiers"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Dossiers</button>
     <button class="nav-btn" data-view="perfs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>Performance COM</button>
@@ -26,7 +27,6 @@
     <button class="nav-btn" data-view="guide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Guide d'usage</button>
     <button class="nav-btn" data-view="methodo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Méthodologie</button>
   </nav>
-  <div class="side-foot">AGL • SPOT • Données locales<br>Déployable GitHub + Vercel<br><span id="rowCountSide">0 dossier</span></div>
 </aside>
 
 <div class="main">
@@ -73,8 +73,32 @@
       <span class="pill info" id="gCount">0 dossier</span>
     </div>
 
+    <!-- PILOTAGE MOIS — dashboard simple -->
+    <section class="view active" id="view-pilotage">
+      <div class="card">
+        <div class="card-h"><h3>📅 Pilotage du mois — <span id="pilTitle">—</span></h3>
+          <span class="hint">Cliquez tout : indicateurs, COM, dossiers</span>
+          <span style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button class="btn small" id="pilPrev" title="Mois précédent">←</button>
+            <select id="pilMonth" style="border:1px solid var(--agl-line);border-radius:8px;padding:6px 8px;font-weight:700"><option value="">Tous les mois</option></select>
+            <button class="btn small" id="pilNext" title="Mois suivant">→</button>
+            <button class="btn small" id="pilJ" title="Revenir au mois du jour J">Mois du jour J</button>
+          </span>
+        </div>
+        <div class="card-b">
+          <div class="kpi-grid" id="pilKpis"></div>
+          <div class="sev-grid" id="pilSev"></div>
+        </div>
+      </div>
+      <div class="panels" style="margin-top:12px">
+        <div class="card"><div class="card-h"><h3>🔥 COM du mois</h3><span class="hint">Cliquez un COM → ses dossiers</span></div><div class="card-b"><div class="bars" id="pilCom"></div></div></div>
+        <div class="card"><div class="card-h"><h3>⏱ Étapes bloquantes du mois</h3><span class="hint">Où s'accumulent les dossiers ?</span></div><div class="card-b"><div class="bars" id="pilSteps"></div></div></div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>🎯 À traiter en priorité ce mois-ci</h3><button class="btn small" data-goto="dossiers" style="margin-left:auto">Tous les dossiers →</button></div><div class="table-wrap" style="max-height:360px"><table id="pilTable"><thead><tr><th>Score</th><th>N° dossier</th><th>COM</th><th>Client</th><th>ETA / Délai</th><th>Alertes</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
     <!-- OVERVIEW -->
-    <section class="view active" id="view-overview">
+    <section class="view" id="view-overview">
       <div class="kpi-grid" id="kpiGrid"></div>
       <div class="sev-grid" id="sevGrid" title="Cliquez un indicateur pour voir les alertes correspondantes"></div>
       <div class="gauges" id="gaugeGrid"></div>
