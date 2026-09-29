@@ -98,7 +98,11 @@ const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
 /* ---------- État ---------- */
-const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"overview" };
+const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"overview", selCom:"" };
+/* Filtres globaux — appliqués à toutes les vues */
+const F = { com:"", metier:"", crit:"", month:"", year:"" };
+const MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const ymLabel=ym=>{ if(!ym) return ""; const [y,m]=ym.split("-"); return `${MOIS[+m-1]||m} ${y}`; };
 const toast = m => { const t=document.createElement("div"); t.className="toast"; t.innerHTML=m; $("#toasts").appendChild(t); setTimeout(()=>t.remove(),4200); };
 
 /* IndexedDB minimal */
@@ -202,58 +206,80 @@ function enrichAll(rows){
     sc=Math.min(100,sc);
     const crit = sc>=CFG.thCrit?"Critique": sc>=CFG.thHaute?"Haute": sc>=CFG.thMoy?"Moyenne":"OK";
     const comments=[r.com1,r.com2,r.com3,r.com4,r.com5].filter(x=>x&&String(x).trim()).join(" • ");
-    return {...r, delaiETA, delaiRTA, etape:etape.label, etapeKey, stagn, inv, alerts:al, score:sc, crit, comments, lastIdx};
+    const etaYM=r.dateETA?`${r.dateETA.getFullYear()}-${String(r.dateETA.getMonth()+1).padStart(2,"0")}`:"";
+    return {...r, delaiETA, delaiRTA, etape:etape.label, etapeKey, stagn, inv, alerts:al, score:sc, crit, comments, lastIdx, etaYM, etaYear:r.dateETA?String(r.dateETA.getFullYear()):"", etaMonth:r.dateETA?String(r.dateETA.getMonth()+1).padStart(2,"0"):""};
   });
-}
-
-/* ---------- Démo ---------- */
-function demoRows(){
-  const coms=["CM02-KOFFI9","CM08-BOLOU1","CM10-TECHI1","CM11-COULIB43","CM12-HOBA1","CM13-NDRI4","CM14-AMONTCH2","CM15-TSJ323","CM16-NDA1","CM19-AMAN2","CM20-MBAHIA1","CM22-NDRY1"];
-  const clients=["CARGILL COCOA SARL","BIA COTE D IVOIRE","CANAL+ COTE D IVOIRE","CFAO MOBILITY","FRIESLANDCAMPINA","BUREAU VERITAS","EPIROC CI","K1 MINING","LITHIUM DU MALI","AFRIPOUL-CI","BANACIBANANE","COSTA SARL"];
-  const metiers=[["20","20A"],["20","20B"],["20","20C"],["30","30A"],["30","30C"]];
-  const auteurs=["SOUMAHO4","UIT545","FDX152","TOURE10","NGUESSA","BOGLER1","DUR540","UOC324","BOD742","NBN710"];
-  const P=todayPilot(); const D=(off)=>{const d=new Date(P);d.setDate(d.getDate()+off);return d;};
-  const R=(a,b)=>Math.floor(a+Math.random()*(b-a+1));
-  const rows=[];
-  for(let i=0;i<220;i++){
-    const cm=coms[i%coms.length]; const cl=clients[R(0,clients.length-1)]; const [m,sm]=metiers[R(0,4)];
-    const etaOff=R(-30,12), rtaOff=etaOff+R(0,4);
-    const stale = Math.random()<0.45;
-    const r={_i:i, com:cm, metier:m, sousMetier:sm, client:cl, sousCompte:"NZ"+R(1000,99999), designation:["BANANES FRAICHE","PIECES DETACHEES","MATERIELS HOPITAL","VEHICULE NEUF","LAIT EN POUDRE","CONTENEUR FLAT RACK","TUBES PEHD","HERBICIDE"][R(0,7)], poids:String(R(50,120000)), dossier:String(26000000+R(0,999999)),
-      com1: stale&&Math.random()<.5?"atte RFCV":"", com2: stale&&Math.random()<.4?"ok rfcv, atte BL":"", com3:"",com4:"",com5:"",
-      auteur:auteurs[R(0,auteurs.length-1)],
-      dateETA:D(etaOff), dateRTA:D(rtaOff), dateValidation:D(etaOff-R(4,20)),
-      dateDocs: Math.random()<.9?D(Math.min(-1,etaOff-R(0,6))):null, dateNote:null,dateEnreg:null,dateFactDouane:null,dateBAE:null,dateMise:null,dateRetour:null,dateFactInt:null,dateValidFinal:null,dateArchivage:null,
-      delaiETA_raw:"",delaiRTA_raw:""};
-    const adv=Math.random();
-    if(adv>0.25){ r.dateNote=r.dateDocs?D(diffJ(r.dateDocs,P)+R(1,5)):null; }
-    if(adv>0.45&&r.dateNote){ r.dateEnreg=D(diffJ(r.dateNote,P)+R(1,4)); }
-    if(adv>0.6&&r.dateEnreg){ r.dateFactDouane=D(diffJ(r.dateEnreg,P)+R(1,4)); }
-    if(adv>0.72&&r.dateFactDouane){ r.dateBAE=D(diffJ(r.dateFactDouane,P)+R(1,4)); }
-    if(adv>0.82&&r.dateBAE){ r.dateMise=D(diffJ(r.dateBAE,P)+R(0,3)); }
-    if(adv>0.88&&r.dateMise){ r.dateRetour=D(diffJ(r.dateMise,P)+R(1,4)); }
-    if(adv>0.93&&r.dateRetour){ r.dateFactInt=D(diffJ(r.dateRetour,P)+R(1,5)); r.dateValidFinal=r.dateFactInt; }
-    if(adv>0.96&&r.dateValidFinal){ r.dateArchivage=D(diffJ(r.dateValidFinal,P)+R(1,4)); }
-    // cas MAJ masse 28/09
-    if(i%3===0&&r.dateDocs){ const d=new Date("2026-09-28T00:00:00"); r.dateDocs=d; }
-    rows.push(r);
-  }
-  return rows;
 }
 
 /* ---------- Filtres ---------- */
 function uniq(k){ const s=new Set(); S.enriched.forEach(r=>{ if(r[k]) s.add(String(r[k]).trim()); }); return [...s].sort((a,b)=>a.localeCompare(b,"fr")); }
+function uniqYM(){ const s=new Set(); S.enriched.forEach(r=>{ if(r.etaYM) s.add(r.etaYM); }); return [...s].sort(); }
+function uniqYear(){ const s=new Set(); S.enriched.forEach(r=>{ if(r.etaYear) s.add(r.etaYear); }); return [...s].sort().reverse(); }
+function setSelect(el,v){ if(!el) return; el.value=v||""; }
 function fillSelects(){
-  const map=[["#fCom","com"],["#fMetier","metier"],["#fSous","sousMetier"],["#fClient","client"],["#fSousCpte","sousCompte"],["#alertCom","com"]];
-  map.forEach(([sel,k])=>{ const el=$(sel); const cur=el.value; el.innerHTML='<option value="">Tous</option>'+uniq(k).map(v=>`<option ${v===cur?"selected":""}>${esc(v)}</option>`).join(""); });
+  const coms=uniq("com"), mets=uniq("metier"), yms=uniqYM(), yrs=uniqYear();
+  const opt=(cur,vals,lbl)=>'<option value="">'+lbl+'</option>'+vals.map(v=>`<option value="${esc(v)}" ${v===cur?"selected":""}>${esc(v)}</option>`).join("");
+  const optYM=cur=>'<option value="">Tous</option>'+yms.map(v=>`<option value="${v}" ${v===cur?"selected":""}>${esc(ymLabel(v))}</option>`).join("");
+  // barre globale
+  setSelect($("#gCom"),F.com); $("#gCom").innerHTML=opt(F.com,coms,"Tous");
+  setSelect($("#gMetier"),F.metier); $("#gMetier").innerHTML=opt(F.metier,mets,"Tous");
+  setSelect($("#gMonth"),F.month); $("#gMonth").innerHTML=optYM(F.month);
+  setSelect($("#gYear"),F.year); $("#gYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>`<option ${v===F.year?"selected":""}>${v}</option>`).join("");
+  setSelect($("#gCrit"),F.crit);
+  // dossiers (miroirs + spécifiques)
+  setSelect($("#fCom"),F.com); $("#fCom").innerHTML=opt(F.com,coms,"Tous");
+  setSelect($("#fMetier"),F.metier); $("#fMetier").innerHTML=opt(F.metier,mets,"Tous");
+  setSelect($("#fCrit"),F.crit);
+  setSelect($("#fMonth"),F.month); $("#fMonth").innerHTML=optYM(F.month);
+  setSelect($("#fYear"),F.year); $("#fYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>`<option ${v===F.year?"selected":""}>${v}</option>`).join("");
+  const sous=uniq("sousMetier"), cls=uniq("client"), scs=uniq("sousCompte");
+  const keep=(id,vals)=>{ const el=$(id); const cur=el.value; el.innerHTML=opt(cur,vals,"Tous"); };
+  keep("#fSous",sous); keep("#fClient",cls); keep("#fSousCpte",scs);
+  // alertes
+  setSelect($("#alertCom"),F.com); $("#alertCom").innerHTML=opt($("#alertCom").value||F.com,coms,"Tous");
+  const am=$("#alertMetier"); keep("#alertMetier",mets);
+  setSelect($("#alertMonth"),F.month); $("#alertMonth").innerHTML=optYM($("#alertMonth").value||F.month);
+  setSelect($("#alertYear"),F.year); $("#alertYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>{const cur=$("#alertYear").value||F.year;return `<option ${v===cur?"selected":""}>${v}</option>`;}).join("");
+  const n=baseFiltered().length;
+  $("#gCount").textContent=n.toLocaleString("fr-FR")+" dossier"+(n>1?"s":"");
+}
+/* Filtres globaux : toute vue = baseFiltered() */
+function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
+  const c=comOv!==undefined?comOv:F.com, m=metOv!==undefined?metOv:F.metier;
+  const mo=monthOv!==undefined?monthOv:F.month, y=yearOv!==undefined?yearOv:F.year, cr=critOv!==undefined?critOv:F.crit;
+  if(c&&r.com!==c) return false;
+  if(m&&r.metier!==m) return false;
+  if(mo&&r.etaYM!==mo) return false;
+  if(y&&r.etaYear!==y) return false;
+  if(cr&&r.crit!==cr) return false;
+  return true;
+}
+function baseFiltered(){ return S.enriched.filter(r=>matchGlobal(r)); }
+/* écriture centralisée d'un filtre global + synchro des miroirs + rerendu */
+function setF(key,val){
+  F[key]=val||"";
+  const map={com:["#gCom","#fCom"],metier:["#gMetier","#fMetier"],crit:["#gCrit","#fCrit"],month:["#gMonth","#fMonth"],year:["#gYear","#fYear"]};
+  (map[key]||[]).forEach(s=>setSelect($(s),F[key]));
+  if(key==="com"&&$("#alertCom")) setSelect($("#alertCom"),F.com);
+  if(key==="month"&&$("#alertMonth")) setSelect($("#alertMonth"),F.month);
+  if(key==="year"&&$("#alertYear")) setSelect($("#alertYear"),F.year);
+  S.pageMain=0; S.pageAlert=0;
+  renderAll();
+}
+function clearAllFilters(){
+  F.com=F.metier=F.crit=F.month=F.year="";
+  ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+  S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
+  $$("#sevChips .chip").forEach((x,i)=>x.classList.toggle("active",i===0));
+  renderAll();
 }
 function filteredMain(){
-  const P=todayPilot();
-  const q=norm($("#fSearch").value||""), c=$("#fCom").value, m=$("#fMetier").value, sm=$("#fSous").value, cl=$("#fClient").value, sc=$("#fSousCpte").value, cr=$("#fCrit").value, dl=$("#fDelay").value, st=$("#fStep").value;
+  const q=norm($("#fSearch").value||""), sm=$("#fSous").value, cl=$("#fClient").value, sc=$("#fSousCpte").value, dl=$("#fDelay").value, st=$("#fStep").value;
   const e1=$("#fEta1").value?new Date($("#fEta1").value+"T00:00:00"):null, e2=$("#fEta2").value?new Date($("#fEta2").value+"T00:00:00"):null;
   return S.enriched.filter(r=>{
-    if(c&&r.com!==c) return false; if(m&&r.metier!==m) return false; if(sm&&r.sousMetier!==sm) return false;
-    if(cl&&r.client!==cl) return false; if(sc&&r.sousCompte!==sc) return false; if(cr&&r.crit!==cr) return false;
+    if(!matchGlobal(r)) return false;
+    if(sm&&r.sousMetier!==sm) return false;
+    if(cl&&r.client!==cl) return false; if(sc&&r.sousCompte!==sc) return false;
     if(st&&r.etapeKey!==st&&!(st==="archive"&&r.dateArchivage)) return false;
     if(e1&&(!r.dateETA||r.dateETA<e1)) return false; if(e2&&(!r.dateETA||r.dateETA>e2)) return false;
     if(dl==="etaLate"&&!(r.delaiETA<0)) return false; if(dl==="etaCrit"&&!(r.delaiETA<CFG.etaCrit)) return false;
@@ -265,13 +291,14 @@ function filteredMain(){
   });
 }
 function filteredAlerts(){
-  const q=norm($("#alertSearch").value||""), c=$("#alertCom").value, sev=S.sevFilter, type=S.alertFilter;
+  const q=norm($("#alertSearch").value||""), cLoc=$("#alertCom").value, mLoc=$("#alertMetier").value, moLoc=$("#alertMonth").value, yLoc=$("#alertYear").value;
+  const sev=S.sevFilter, type=S.alertFilter;
   let list=[];
   S.enriched.forEach(r=>r.alerts.forEach(a=>list.push({r,a})));
   return list.filter(({r,a})=>{
     if(type&&a.c!==type) return false;
     if(sev&&ALERT_DEFS[a.c].sev!==sev) return false;
-    if(c&&r.com!==c) return false;
+    if(!matchGlobal(r, cLoc||F.com, mLoc||F.metier, moLoc||F.month, yLoc||F.year, F.crit)) return false;
     if(q){ const hay=norm([r.dossier,r.client,r.designation,r.com,r.comments,a.d].join(" ")); if(!hay.includes(q)) return false; }
     return true;
   }).sort((x,y)=>{
@@ -313,7 +340,7 @@ function gaugeSVG(pct,color){
   return `<svg class="gauge-svg" viewBox="0 0 130 78"><path d="M ${pt(a0)} A ${r} ${r} 0 0 1 ${pt(Math.PI*2)}" fill="none" stroke="#e6ecf5" stroke-width="12" stroke-linecap="round"/><path d="${arc}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/><text x="65" y="58" text-anchor="middle" font-size="20" font-weight="800" fill="#0f2a52">${pct}%</text></svg>`;
 }
 function renderKPIs(){
-  const E=S.enriched, P=todayPilot();
+  const E=baseFiltered(), P=todayPilot();
   const tot=E.length;
   const crit=E.filter(r=>r.crit==="Critique").length, haute=E.filter(r=>r.crit==="Haute").length;
   const arch=E.filter(r=>r.dateArchivage).length;
@@ -321,7 +348,7 @@ function renderKPIs(){
   const etaLate=E.filter(r=>r.delaiETA!=null&&r.delaiETA<0&&!r.dateBAE).length;
   const avgStag= tot? Math.round(E.reduce((s,r)=>s+r.stagn.reduce((a,b)=>a+b.jours,0),0)/tot):0;
   const kpis=[
-    {l:"Dossiers pilotés",v:tot,s:`fichier : ${esc(S.fileName||"démo")}`,c:"#0f2a52"},
+    {l:"Dossiers pilotés",v:tot,s:`fichier : ${esc(S.fileName||"aucun — chargez un Excel")}`,c:"#0f2a52"},
     {l:"Critiques",v:crit,s:`${tot?Math.round(crit/tot*100):0}% • haute: ${haute}`,c:"#d92d20"},
     {l:"ETA dépassée sans BAE",v:etaLate,s:"risque surestaries",c:"#e9730c"},
     {l:"Taux BAE",v:(tot?Math.round(bae/tot*100):0)+"%",s:`${bae} dossiers`,c:"#2563eb"},
@@ -337,13 +364,14 @@ function renderKPIs(){
   ];
   $("#gaugeGrid").innerHTML=g.map(x=>`<div class="gauge-card"><h4>${x.t}</h4>${gaugeSVG(x.p,x.c)}<p>${x.h}</p></div>`).join("");
   $("#navAlertCount").textContent=E.reduce((s,r)=>s+r.alerts.length,0);
-  $("#rowCountSide").textContent=tot.toLocaleString("fr-FR")+" dossiers • "+fmtD(P);
+  $("#rowCountSide").textContent=S.enriched.length.toLocaleString("fr-FR")+" dossiers • "+fmtD(P);
+  const gc=$("#gCount"); if(gc) gc.textContent=tot.toLocaleString("fr-FR")+" dossier"+(tot>1?"s":"")+" (filtres globaux)";
   renderSevGrid();
   renderWorry();
 }
 /* Indicateurs différenciés par sévérité — cliquables vers Alertes */
 function renderSevGrid(){
-  const E=S.enriched;
+  const E=baseFiltered();
   const groups=[["Critique","🔴","Dossiers à traiter en priorité"],["Haute","🟠","Action rapide requise"],["Moyenne","🟡","À surveiller"],["OK","🟢","Sains, sans alerte"]];
   $("#sevGrid").innerHTML=groups.map(([sev,ico,h])=>{
     const n=E.filter(r=>r.crit===sev).length;
@@ -352,48 +380,49 @@ function renderSevGrid(){
     return `<button class="sev-card${active}" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${n.toLocaleString("fr-FR")}</b><span>${h}</span></span><span style="font-size:18px;color:${col}">→</span></button>`;
   }).join("");
   $$("#sevGrid .sev-card").forEach(b=>b.onclick=()=>{
-    if(b.dataset.sev==="OK"){ $("#fCrit").value="OK"; S.pageMain=0; goto("dossiers"); renderMain(); return; }
+    if(b.dataset.sev==="OK"){ setF("crit","OK"); goto("dossiers"); return; }
     S.sevFilter=S.sevFilter===b.dataset.sev?"":b.dataset.sev;
     $$("#sevChips .chip").forEach(x=>x.classList.toggle("active",(x.dataset.sev||"")===S.sevFilter));
     renderSevGrid(); goto("alertes"); renderAlertTable();
   });
 }
-/* Cas préoccupants — top scores, clic = drawer */
+/* Cas préoccupants — top scores (filtres globaux appliqués), clic = drawer */
 function renderWorry(){
-  const top=[...S.enriched].sort((a,b)=>b.score-a.score).slice(0,8);
+  const top=baseFiltered().sort((a,b)=>b.score-a.score).slice(0,8);
   const q=norm($("#fSearch")?.value||"");
   $("#worryTable tbody").innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b> ${pill(r.crit)}</td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${r.alerts.map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:220px;font-size:12px">${hiComment((r.comments||"").slice(0,160),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
   $$("#worryTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function renderComBars(){
-  const by={}; S.enriched.forEach(r=>{ const k=r.com||"(vide)"; (by[k]=by[k]||{n:0,sc:0,crit:0}); by[k].n++; by[k].sc+=r.score; by[k].crit+= (r.crit==="Critique"||r.crit==="Haute")?1:0; });
+  const by={}; baseFiltered().forEach(r=>{ const k=r.com||"(vide)"; (by[k]=by[k]||{n:0,sc:0,crit:0}); by[k].n++; by[k].sc+=r.score; by[k].crit+= (r.crit==="Critique"||r.crit==="Haute")?1:0; });
   const arr=Object.entries(by).map(([k,v])=>({k,...v,avg:v.sc/v.n, rate:v.crit/v.n})).sort((a,b)=>b.avg-a.avg).slice(0,10);
   const max=Math.max(1,...arr.map(a=>a.avg));
-  $("#comBars").innerHTML=arr.length?arr.map(a=>`<div class="bar-row"><span><b style="cursor:pointer;color:#0f2a52" data-com="${esc(a.k)}">${esc(a.k)}</b><br><span style="color:#64748b">${a.n} dos. • ${Math.round(a.rate*100)}% alertés</span></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(a.avg/max*100)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#2563eb"}"></div></div><b>${a.avg.toFixed(0)}</b></div>`).join(""):'<p style="color:#64748b">Chargez un fichier pour voir les COM en difficulté.</p>';
-  $$("#comBars [data-com]").forEach(el=>el.onclick=()=>{ $("#fCom").value=el.dataset.com; S.pageMain=0; goto("dossiers"); renderMain(); });
+  $("#comBars").innerHTML=arr.length?arr.map(a=>`<div class="bar-row"><span><b style="cursor:pointer;color:#0f2a52" data-com="${esc(a.k)}">${esc(a.k)}</b><br><span style="color:#64748b">${a.n} dos. • ${Math.round(a.rate*100)}% alertés</span></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(a.avg/max*100)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#2563eb"}"></div></div><b>${a.avg.toFixed(0)}</b></div>`).join(""):(S.enriched.length?'<p style="color:#64748b">Aucun COM sur ce périmètre filtré.</p>':'<div class="empty-state"><b>En attente de données</b>Chargez votre export Excel pour voir les COM en difficulté.</div>');
+  $$("#comBars [data-com]").forEach(el=>el.onclick=()=>{ setF("com",el.dataset.com); goto("dossiers"); });
 }
 function renderSteps(){
   const keys=["validation","docs","note","douane","factDouane","bae","mise","retour","factInt","validFinal","archivage"];
   const labels={validation:"À ouvrir / Valid.",docs:"Docs complets",note:"Note détail",douane:"Enreg. douane",factDouane:"Fact. douane",bae:"BAE",mise:"Mise livr.",retour:"Retour livr.",factInt:"Fact. interv.",validFinal:"Valid. finale",archivage:"Archivé"};
   const cnt={}; keys.forEach(k=>cnt[k]=0);
-  S.enriched.forEach(r=>{ cnt[r.lastIdx<0?"validation": r.dateArchivage?"archivage": STEPS[Math.min(r.lastIdx+1,10)].k ]=(cnt[r.lastIdx<0?"validation": r.dateArchivage?"archivage": STEPS[Math.min(r.lastIdx+1,10)].k]||0)+1; });
+  baseFiltered().forEach(r=>{ cnt[r.lastIdx<0?"validation": r.dateArchivage?"archivage": STEPS[Math.min(r.lastIdx+1,10)].k ]=(cnt[r.lastIdx<0?"validation": r.dateArchivage?"archivage": STEPS[Math.min(r.lastIdx+1,10)].k]||0)+1; });
   const order=["validation","docs","note","douane","factDouane","bae","mise","retour","factInt","validFinal","archivage"];
   const max=Math.max(1,...order.map(k=>cnt[k]));
   $("#stepBars").innerHTML=order.map(k=>`<div class="bar-row"><span>${labels[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(cnt[k]/max*100)}%;background:${["bae","mise","retour"].includes(k)?"#d92d20":k==="archivage"?"#12805c":"#0f2a52"}"></div></div><b>${cnt[k]}</b></div>`).join("");
 }
 function renderDelays(){
+  const E=baseFiltered();
   const buckets=[["≤ -15j",r=>r.delaiETA!=null&&r.delaiETA<=-15],["-14 à -8j",r=>r.delaiETA!=null&&r.delaiETA>=-14&&r.delaiETA<=-8],["-7 à -1j",r=>r.delaiETA!=null&&r.delaiETA>=-7&&r.delaiETA<0],["0 à +3j",r=>r.delaiETA!=null&&r.delaiETA>=0&&r.delaiETA<=3],["> +3j",r=>r.delaiETA!=null&&r.delaiETA>3],["Sans ETA",r=>r.delaiETA==null]];
-  const max=Math.max(1,...buckets.map(([,f])=>S.enriched.filter(f).length));
-  $("#delayDist").innerHTML=buckets.map(([l,f])=>{const n=S.enriched.filter(f).length;return `<div class="bar-row"><span>Délai ETA ${l}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:${l.startsWith("≤")||l.startsWith("-")?"#d92d20":l.startsWith("0")?"#e9730c":"#12805c"}"></div></div><b>${n}</b></div>`;}).join("")+`<div class="footer-note">Délai = ETA − date pilotage. Négatif = déjà arrivé. Même logique RTA. Filtrez par délai dans l'onglet Dossiers.</div>`;
+  const max=Math.max(1,...buckets.map(([,f])=>E.filter(f).length));
+  $("#delayDist").innerHTML=buckets.map(([l,f])=>{const n=E.filter(f).length;return `<div class="bar-row"><span>Délai ETA ${l}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:${l.startsWith("≤")||l.startsWith("-")?"#d92d20":l.startsWith("0")?"#e9730c":"#12805c"}"></div></div><b>${n}</b></div>`;}).join("")+`<div class="footer-note">Délai = ETA − date pilotage. Négatif = déjà arrivé. Même logique RTA. Filtrez par délai dans l'onglet Dossiers.</div>`;
 }
 function renderTopAlerts(){
   const list=filteredAlerts().slice(0,6);
-  $("#topAlerts").innerHTML=list.length?list.map(({r,a})=>{const d=ALERT_DEFS[a.c];return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef2f7"><span style="width:10px;height:10px;border-radius:50%;background:${d.c};margin-top:5px;flex:none"></span><div style="flex:1"><b>${a.c} — ${esc(d.t)}</b><br><span style="font-size:12px;color:#475569">${esc(r.dossier||"—")} • ${esc(r.com||"—")} • ${esc(a.d)}</span></div><button class="btn small" data-open="${r._i}">Ouvrir</button></div>`;}).join(""):'<p style="color:#64748b">Aucune alerte — chargez des données.</p>';
+  $("#topAlerts").innerHTML=list.length?list.map(({r,a})=>{const d=ALERT_DEFS[a.c];return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef2f7"><span style="width:10px;height:10px;border-radius:50%;background:${d.c};margin-top:5px;flex:none"></span><div style="flex:1"><b>${a.c} — ${esc(d.t)}</b><br><span style="font-size:12px;color:#475569">${esc(r.dossier||"—")} • ${esc(r.com||"—")} • ${esc(a.d)}</span></div><button class="btn small" data-open="${r._i}">Ouvrir</button></div>`;}).join(""):(S.enriched.length?'<p style="color:#64748b">Aucune alerte sur ce périmètre. ✔</p>':'<div class="empty-state"><b>En attente de données</b>Chargez votre export Excel pour voir les alertes du jour.</div>');
   $$("#topAlerts [data-open]").forEach(b=>b.onclick=()=>openDrawer(+b.dataset.open));
 }
 function renderAlertTypes(){
   const counts={}; Object.keys(CFG.alerts).forEach(k=>counts[k]=0);
-  S.enriched.forEach(r=>r.alerts.forEach(a=>counts[a.c]++));
+  baseFiltered().forEach(r=>r.alerts.forEach(a=>counts[a.c]++));
   $("#alertTypes").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<div class="alert-type ${S.alertFilter===k?"active":""}${d.on===false?" off":""}" data-t="${k}" style="--c:${d.c};${d.on===false?"opacity:.45;filter:grayscale(.6)":""}" title="${esc(d.h)} — poids ${d.w}, seuil ${d.days}j${d.on===false?" (désactivée — voir Administration)":""}"><small>${d.ico||"•"} ${k} • ${d.sev}${d.on===false?" • OFF":""}</small><b>${counts[k].toLocaleString("fr-FR")}</b><span><b style="font-size:12px">${esc(d.t)}</b><br>${esc(d.h)}</span></div>`).join("");
   $$("#alertTypes .alert-type").forEach(el=>el.onclick=()=>{ S.alertFilter=S.alertFilter===el.dataset.t?null:el.dataset.t; S.pageAlert=0; renderAlertTypes(); renderAlertTable(); });
 }
@@ -408,7 +437,7 @@ function renderMain(){
   const slice=rows.slice(S.pageMain*S.perPage,(S.pageMain+1)*S.perPage);
   $("#dossierCount").textContent=rows.length.toLocaleString("fr-FR")+" dossier(s)";
   $("#mainPagerInfo").textContent=`Page ${S.pageMain+1}/${pages}`;
-  $("#mainTable tbody").innerHTML=slice.map(r=>`<tr class="${r.crit==="Critique"?"crit":""}" data-i="${r._i}" style="cursor:pointer"><td>${pill(r.crit)}<br><small style="color:#64748b">${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b><br><small style="color:#64748b">${esc(r.designation||"")}</small></td><td>${esc(r.com||"—")}<br><small style="color:#64748b">${esc(r.auteur||"")}</small></td><td>${esc((r.client||"").slice(0,26))}<br><small style="color:#64748b">${esc(r.sousCompte||"")}</small></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${delayCell(r.delaiRTA,r.dateRTA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td style="font-size:11.5px;color:#334155">V:${fmtD(r.dateValidation)}<br>D:${fmtD(r.dateDocs)} • N:${fmtD(r.dateNote)}<br>E:${fmtD(r.dateEnreg)} • B:${fmtD(r.dateBAE)}</td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}${r.alerts.length>3?` <small>+${r.alerts.length-3}</small>`:""}</td></tr>`).join("")||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:22px">Aucun dossier — ajustez les filtres ou chargez un Excel.</td></tr>';
+  $("#mainTable tbody").innerHTML=slice.map(r=>`<tr class="${r.crit==="Critique"?"crit":""}" data-i="${r._i}" style="cursor:pointer"><td>${pill(r.crit)}<br><small style="color:#64748b">${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b><br><small style="color:#64748b">${esc(r.designation||"")}</small></td><td>${esc(r.com||"—")}<br><small style="color:#64748b">${esc(r.auteur||"")}</small></td><td>${esc((r.client||"").slice(0,26))}<br><small style="color:#64748b">${esc(r.sousCompte||"")}</small></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${delayCell(r.delaiRTA,r.dateRTA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td style="font-size:11.5px;color:#334155">V:${fmtD(r.dateValidation)}<br>D:${fmtD(r.dateDocs)} • N:${fmtD(r.dateNote)}<br>E:${fmtD(r.dateEnreg)} • B:${fmtD(r.dateBAE)}</td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}${r.alerts.length>3?` <small>+${r.alerts.length-3}</small>`:""}</td></tr>`).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucun dossier avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » via 📤 Charger Excel ou glisser-déposer.</div></td></tr>');
   $$("#mainTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function renderAlertTable(){
@@ -416,31 +445,76 @@ function renderAlertTable(){
   const pages=Math.max(1,Math.ceil(list.length/S.perPage)); S.pageAlert=Math.min(S.pageAlert,pages-1);
   const slice=list.slice(S.pageAlert*S.perPage,(S.pageAlert+1)*S.perPage);
   $("#alertPagerInfo").textContent=`${list.length.toLocaleString("fr-FR")} alerte(s) • Page ${S.pageAlert+1}/${pages}`;
-  $("#alertTable tbody").innerHTML=slice.map(({r,a})=>{const d=ALERT_DEFS[a.c];return `<tr data-i="${r._i}" style="cursor:pointer"><td>${pill(d.sev)}<br><small>${a.c} • ${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td><b style="color:${d.c}">${a.c} — ${esc(d.t)}</b></td><td style="white-space:normal;min-width:220px">${esc(a.d)}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${esc((r.comments||"").slice(0,140))}</td><td><button class="btn small" data-i="${r._i}">→</button></td></tr>`;}).join("")||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:22px">Aucune alerte avec ces filtres.</td></tr>';
+  $("#alertTable tbody").innerHTML=slice.map(({r,a})=>{const d=ALERT_DEFS[a.c];return `<tr data-i="${r._i}" style="cursor:pointer"><td>${pill(d.sev)}<br><small>${a.c} • ${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td><b style="color:${d.c}">${a.c} — ${esc(d.t)}</b></td><td style="white-space:normal;min-width:220px">${esc(a.d)}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${esc((r.comments||"").slice(0,140))}</td><td><button class="btn small" data-i="${r._i}">→</button></td></tr>`;}).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucune alerte avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » pour voir les alertes.</div></td></tr>');
   $$("#alertTable tbody tr").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
+function perfStats(rows){
+  const by={};
+  rows.forEach(r=>{const k=r.com||"(vide)";(by[k]=by[k]||{n:0,sc:0,crit:0,eta:[],bae:0,arch:0});const o=by[k];o.n++;o.sc+=r.score;o.crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0;if(r.delaiETA!=null)o.eta.push(r.delaiETA);if(r.dateBAE)o.bae++;if(r.dateArchivage)o.arch++;});
+  return Object.entries(by).map(([k,v])=>({...v,k,avg:v.sc/v.n,rate:v.crit/v.n,med:v.eta.length?[...v.eta].sort((a,b)=>a-b)[Math.floor(v.eta.length/2)]:null,tBae:v.bae/v.n,tArch:v.arch/v.n})).sort((a,b)=>b.avg-a.avg);
+}
+function verdictPill(avg){
+  return avg>=CFG.thCrit?'<span class="pill crit">🔴 En difficulté</span>':avg>=CFG.thHaute?'<span class="pill haute">🟠 À surveiller</span>':'<span class="pill ok">🟢 Fluide</span>';
+}
 function renderPerfs(){
-  const by={}; S.enriched.forEach(r=>{const k=r.com||"(vide)";(by[k]=by[k]||{n:0,sc:0,crit:0,eta:[],bae:0,arch:0});const o=by[k];o.n++;o.sc+=r.score;o.crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0;if(r.delaiETA!=null)o.eta.push(r.delaiETA);if(r.dateBAE)o.bae++;if(r.dateArchivage)o.arch++;});
-  const arr=Object.entries(by).map(([k,v])=>({...v,k,avg:v.sc/v.n,rate:v.crit/v.n,med:v.eta.length?[...v.eta].sort((a,b)=>a-b)[Math.floor(v.eta.length/2)]:null,tBae:v.bae/v.n,tArch:v.arch/v.n})).sort((a,b)=>b.avg-a.avg);
+  const arr=perfStats(baseFiltered());
   const dif=arr.filter(a=>a.avg>=CFG.thHaute).length;
+  if(!S.selCom||!arr.some(a=>a.k===S.selCom)) S.selCom=arr[0]?.k||"";
   $("#perfKpis").innerHTML=[{l:"COM suivis",v:arr.length,s:"commerciaux actifs"},{l:"COM en difficulté",v:dif,s:`score ≥ ${CFG.thHaute}`},{l:"Plus critique",v:arr[0]?.k||"—",s:arr[0]?`score ${arr[0].avg.toFixed(0)}`:""},{l:"Plus fluide",v:arr.length?arr[arr.length-1].k:"—",s:arr.length?`score ${arr[arr.length-1].avg.toFixed(0)}`:""}].map(k=>`<div class="kpi"><label>${k.l}</label><strong style="font-size:18px">${esc(String(k.v))}</strong><span>${esc(k.s)}</span></div>`).join("");
-  $("#perfTable tbody").innerHTML=arr.map(a=>`<tr data-com="${esc(a.k)}"><td><b style="cursor:pointer;color:#0f2a52" data-act="see">${esc(a.k)}</b></td><td>${a.n}</td><td>${Math.round(a.rate*100)}%</td><td><div class="progress"><i style="width:${Math.min(100,a.avg)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#12805c"}"></i></div><small>${a.avg.toFixed(1)}</small></td><td class="${a.med<0?"late":"early"}">${a.med==null?"—":a.med+"j"}</td><td>${Math.round(a.tBae*100)}%</td><td>${Math.round(a.tArch*100)}%</td><td>${a.avg>=CFG.thCrit?'<span class="pill crit">🔴 En difficulté</span>':a.avg>=CFG.thHaute?'<span class="pill haute">🟠 À surveiller</span>':'<span class="pill ok">🟢 Fluide</span>'}</td><td style="white-space:nowrap"><button class="btn small" data-act="see" title="Voir les dossiers">👁</button> <button class="btn small" data-act="csv" title="Exporter CSV du COM">⬇</button> <button class="btn small" data-act="mail" title="Envoyer la situation par e-mail">✉️</button></td></tr>`).join("")||'<tr><td colspan="9" style="text-align:center;color:#64748b">—</td></tr>';
+  $("#perfTable tbody").innerHTML=arr.map(a=>`<tr data-com="${esc(a.k)}" class="${a.k===S.selCom?"sel":""}"><td><b style="cursor:pointer;color:#0f2a52" data-act="see">${esc(a.k)}</b></td><td>${a.n}</td><td>${Math.round(a.rate*100)}%</td><td><div class="progress"><i style="width:${Math.min(100,a.avg)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#12805c"}"></i></div><small>${a.avg.toFixed(1)}</small></td><td class="${a.med<0?"late":"early"}">${a.med==null?"—":a.med+"j"}</td><td>${Math.round(a.tBae*100)}%</td><td>${Math.round(a.tArch*100)}%</td><td>${verdictPill(a.avg)}</td><td style="white-space:nowrap"><button class="btn small" data-act="see" title="Voir les dossiers">👁</button> <button class="btn small" data-act="csv" title="Exporter CSV du COM">⬇</button> <button class="btn small" data-act="mail" title="Envoyer la situation par e-mail">✉️</button></td></tr>`).join("")||'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel pour voir le classement des COM.</div></td></tr>';
   $$("#perfTable tbody tr").forEach(tr=>{
     const com=tr.dataset.com;
-    tr.querySelector('[data-act="see"]').onclick=e=>{ e.stopPropagation(); $("#fCom").value=com; S.pageMain=0; goto("dossiers"); renderMain(); };
-    tr.querySelector('[data-act="csv"]').onclick=e=>{ e.stopPropagation(); download(`spot_situation_${com}.csv`,"﻿"+toCSV(S.enriched.filter(r=>r.com===com)),"text/csv"); toast(`⬇ Situation <b>${esc(com)}</b> exportée (CSV)`); };
+    tr.querySelector('[data-act="see"]').onclick=e=>{ e.stopPropagation(); setF("com",com); goto("dossiers"); };
+    tr.querySelector('[data-act="csv"]').onclick=e=>{ e.stopPropagation(); download(`spot_situation_${com}.csv`,"﻿"+toCSV(S.enriched.filter(r=>r.com===com)),"text/csv"); toast(`⬇ Situation <b>${esc(com)}</b> exportée en intégralité (CSV)`); };
     tr.querySelector('[data-act="mail"]').onclick=e=>{ e.stopPropagation(); openMailModal(com); };
+    tr.onclick=e=>{ if(e.target.closest("button")) return; S.selCom=com; renderPerfs(); };
   });
+  renderComDetail();
+}
+/* Détail d'un COM : KPIs, criticité, alertes, mois, top dossiers */
+function renderComDetail(){
+  const com=S.selCom;
+  $("#comDetailName").textContent=com||"—";
+  const body=$("#comDetailKpis"), sev=$("#comDetailSev"), al=$("#comDetailAlerts"), mo=$("#comDetailMonths"), tb=$("#comDetailTable tbody");
+  if(!com){ body.innerHTML=""; sev.innerHTML="<p style='color:#64748b'>—</p>"; al.innerHTML=""; mo.innerHTML=""; tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><b>Sélectionnez un COM</b>Cliquez une ligne du classement.</div></td></tr>'; return; }
+  const rows=baseFiltered().filter(r=>r.com===com);
+  const n=rows.length||1;
+  const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length, moy=rows.filter(r=>r.crit==="Moyenne").length, ok=rows.filter(r=>r.crit==="OK").length;
+  const etaMed=(()=>{const v=rows.map(r=>r.delaiETA).filter(v=>v!=null).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length/2)]:null;})();
+  const kpis=[
+    {l:"Dossiers",v:rows.length,s:`100% du périmètre filtré`,c:"#0f2a52"},
+    {l:"Critiques",v:crit,s:`${Math.round(crit/n*100)}%`,c:sevColor("Critique")},
+    {l:"Hautes",v:haute,s:`${Math.round(haute/n*100)}%`,c:sevColor("Haute")},
+    {l:"Retard ETA médian",v:etaMed==null?"—":etaMed+"j",s:"délai médian",c:etaMed<0?"#d92d20":"#12805c"},
+    {l:"Taux BAE",v:Math.round(rows.filter(r=>r.dateBAE).length/n*100)+"%",s:"BAE obtenus",c:"#2563eb"},
+    {l:"Taux archivé",v:Math.round(rows.filter(r=>r.dateArchivage).length/n*100)+"%",s:"clôturés",c:"#12805c"},
+  ];
+  body.innerHTML=kpis.map(k=>`<div class="kpi" style="--kpi-c:${k.c}"><label>${k.l}</label><strong>${k.v}</strong><span>${k.s}</span></div>`).join("");
+  const sevRows=[["Critique",crit],["Haute",haute],["Moyenne",moy],["OK",ok]];
+  const mx=Math.max(1,...sevRows.map(x=>x[1]));
+  sev.innerHTML=sevRows.map(([s,v])=>`<div class="bar-row"><span>${s}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mx*100)}%;background:${sevColor(s)}"></div></div><b>${v}</b></div>`).join("");
+  const byA={}; rows.forEach(r=>r.alerts.forEach(a=>{byA[a.c]=(byA[a.c]||0)+1;}));
+  const arrA=Object.entries(byA).sort((a,b)=>b[1]-a[1]).slice(0,6); const mxA=Math.max(1,...arrA.map(x=>x[1]),1);
+  al.innerHTML=arrA.length?arrA.map(([k,v])=>{const d=alertDef(k);return `<div class="bar-row"><span style="cursor:pointer" data-al="${k}" title="${esc(d.h)}"><b style="color:${d.c}">${k}</b> ${esc(d.t.slice(0,26))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxA*100)}%;background:${d.c}"></div></div><b>${v}</b></div>`;}).join(""):"<p style='color:#64748b'>Aucune alerte sur ce périmètre. ✔</p>";
+  $$("#comDetailAlerts [data-al]").forEach(el=>el.onclick=()=>{ S.alertFilter=el.dataset.al; S.pageAlert=0; goto("alertes"); renderAlertTypes(); renderAlertTable(); });
+  const byM={}; rows.forEach(r=>{ if(r.etaYM) byM[r.etaYM]=(byM[r.etaYM]||0)+1; });
+  const arrM=Object.entries(byM).sort().slice(-8); const mxM=Math.max(1,...arrM.map(x=>x[1]),1);
+  mo.innerHTML=arrM.length?arrM.map(([k,v])=>`<div class="bar-row"><span>${ymLabel(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxM*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join(""):"<p style='color:#64748b'>Pas de mois ETA renseignés.</p>";
+  const top=[...rows].sort((a,b)=>b.score-a.score).slice(0,8);
+  const q=norm($("#fSearch")?.value||"");
+  tb.innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:200px;font-size:12px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
+  $$("#comDetailTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function renderBU(){
-  const byM={}; S.enriched.forEach(r=>{const k=r.metier||"(vide)";byM[k]=(byM[k]||0)+1;});
+  const E=baseFiltered();
+  const byM={}; E.forEach(r=>{const k=r.metier||"(vide)";byM[k]=(byM[k]||0)+1;});
   const arrM=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,8); const max=Math.max(1,...arrM.map(a=>a[1]));
-  $("#buBars").innerHTML=arrM.map(([k,v])=>`<div class="bar-row"><span>Métier ${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join("");
-  const byC={}; S.enriched.forEach(r=>{if(r.crit==="Critique"||r.crit==="Haute"){const k=r.client||"(vide)";byC[k]=(byC[k]||0)+1;}});
+  $("#buBars").innerHTML=arrM.length?arrM.map(([k,v])=>`<div class="bar-row"><span>Métier ${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join(""):"<div class='empty-state'><b>Aucune donnée</b>Chargez votre export Excel.</div>";
+  const byC={}; E.forEach(r=>{if(r.crit==="Critique"||r.crit==="Haute"){const k=r.client||"(vide)";byC[k]=(byC[k]||0)+1;}});
   const arrC=Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,8); const maxC=Math.max(1,...arrC.map(a=>a[1]));
   $("#clientBars").innerHTML=(arrC.map(([k,v])=>`<div class="bar-row"><span>${esc(k.slice(0,24))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxC*100)}%;background:#d92d20"></div></div><b>${v}</b></div>`).join(""))||"<p style='color:#64748b'>—</p>";
-  const mets=[...new Set(S.enriched.map(r=>r.metier||"(vide)"))].slice(0,12);
-  $("#buMatrix tbody").innerHTML=mets.map(m=>{const rows=S.enriched.filter(r=>(r.metier||"(vide)")===m);const c=k=>rows.filter(r=>r.etapeKey===k||(k==="archive"&&r.dateArchivage)).length;return `<tr><td><b>${esc(m)}</b></td><td>${rows.length}</td><td>${c("validation")}</td><td>${c("docs")}</td><td>${c("note")}</td><td>${c("douane")}</td><td>${c("bae")}</td><td>${c("mise")+c("retour")}</td><td>${c("factInt")+c("validFinal")}</td><td>${rows.filter(r=>r.dateArchivage).length}</td></tr>`;}).join("");
+  const mets=[...new Set(E.map(r=>r.metier||"(vide)"))].slice(0,12);
+  $("#buMatrix tbody").innerHTML=mets.map(m=>{const rows=E.filter(r=>(r.metier||"(vide)")===m);const c=k=>rows.filter(r=>r.etapeKey===k||(k==="archive"&&r.dateArchivage)).length;return `<tr><td><b>${esc(m)}</b></td><td>${rows.length}</td><td>${c("validation")}</td><td>${c("docs")}</td><td>${c("note")}</td><td>${c("douane")}</td><td>${c("bae")}</td><td>${c("mise")+c("retour")}</td><td>${c("factInt")+c("validFinal")}</td><td>${rows.filter(r=>r.dateArchivage).length}</td></tr>`;}).join("")||'<tr><td colspan="10"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel.</div></td></tr>';
 }
 function renderMethodo(){
   $("#methodoBody").innerHTML=`
@@ -489,12 +563,13 @@ function applyCfgAndRerender(msg){
 function renderGuide(){
   const el=$("#guideBody"); if(!el) return;
   el.innerHTML=`
-  <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code>. Vérifiez le mapping auto (pastilles vertes), Valider. Données stockées <b>en local uniquement</b> (IndexedDB).</div>
+  <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code> (aucune donnée d'exemple : seuls vos dossiers s'affichent). Vérifiez le mapping auto (pastilles vertes), Valider. Données stockées <b>en local uniquement</b> (IndexedDB, intégralité des lignes).</div>
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
+  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
   <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM, ouvrez la fiche, lisez la timeline + stagnations &gt; SLA + commentaires C1–C5.</div>
-  <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : verdict 🔴🟠🟢, 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ <b>envoyer la situation par e-mail</b> (objet + corps prêts, CSV à joindre).</div>
-  <div class="guide-step"><b>6. Exporter.</b> Dossiers : <code>CSV / XLSX / JSON</code> filtrés. Alertes : CSV/XLSX de la sélection. Par COM depuis sa vue. Impression via <code>🖨</code>.</div>
+  <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement + <b>panneau détail</b> (KPIs du COM, criticité, alertes dominantes, volume par mois ETA, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ <b>envoyer la situation par e-mail</b> (objet + corps prêts, CSV à joindre).</div>
+  <div class="guide-step"><b>6. Exporter sans limite.</b> Dossiers : <code>CSV / XLSX / JSON</code> filtrés — <b>volume complet, aucune troncature</b> (construction par blocs, 100% local). Alertes : CSV/XLSX de la sélection. Par COM depuis sa vue. Impression via <code>🖨</code>.</div>
   <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A10, activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
   <div class="guide-step"><b>8. Rituel quotidien conseillé (10 min).</b> Charger Excel → vérifier date → lire indicateurs → traiter 🔴 puis 🟠 → envoyer situations COM en difficulté → exporter la sélection du jour.</div>
   <div class="footer-note">🔒 Confidentialité : lecture Excel dans le navigateur (SheetJS), stockage IndexedDB + localStorage sur ce poste. E-mails via votre messagerie (mailto, aucune donnée envoyée par l'app). Déploiement Vercel = fichiers statiques.</div>`;
@@ -530,7 +605,7 @@ function openDrawer(i){
     </div>
     <div style="display:flex;gap:8px;margin-top:12px"><button class="btn small" id="dCom">Filtrer ce COM</button><button class="btn small" id="dDos">Copier n° dossier</button></div>`;
   $("#drawer").classList.add("open");
-  $("#dCom").onclick=()=>{ $("#fCom").value=r.com||""; goto("dossiers"); renderMain(); $("#drawer").classList.remove("open"); };
+  $("#dCom").onclick=()=>{ setF("com",r.com||""); goto("dossiers"); $("#drawer").classList.remove("open"); };
   $("#dDos").onclick=()=>{ navigator.clipboard?.writeText(r.dossier||""); toast("N° dossier copié"); };
 }
 
@@ -564,8 +639,8 @@ async function ingest(headers, body, fileName){
     // applique mapping par chunks pour rester fluide
     const mapped=applyMapping(headers, body, mapping);
     S.rows=mapped; S.enriched=enrichAll(mapped);
-    fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo();
-    try{ await IDB.put("dossiers",{fileName,rows:mapped.slice(0,20000)}); $("#storageInfo").textContent="Stockage : IndexedDB local ✓"; }catch{ $("#storageInfo").textContent="Stockage : mémoire (fichier volumineux)"; }
+    fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide();
+    try{ await IDB.put("dossiers",{fileName,rows:mapped}); $("#storageInfo").textContent=`Stockage : IndexedDB local ✓ (${mapped.length.toLocaleString("fr-FR")} lignes)`; }catch{ $("#storageInfo").textContent="Stockage : mémoire (navigateur saturé) — exports toujours intégraux"; }
     toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
     $("#loadStatus").textContent=`${S.enriched.length.toLocaleString("fr-FR")} dossiers • ${fileName}`;
   });
@@ -586,10 +661,20 @@ function readFile(f){
   };
   rd.readAsArrayBuffer(f);
 }
-function toCSV(rows){
-  const head=["crit","score","dossier","com","metier","sousMetier","client","sousCompte","designation","eta","delaiETA","rta","delaiRTA","etape","alertes","commentaires","validation","docs","note","enreg","factDouane","bae","mise","retour","factInt","validFinal","archivage"];
+function csvLine(r){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  return head.join(";")+"\n"+rows.map(r=>[r.crit,r.score,r.dossier,r.com,r.metier,r.sousMetier,r.client,r.sousCompte,r.designation,fmtD(r.dateETA),r.delaiETA,fmtD(r.dateRTA),r.delaiRTA,r.etape,r.alerts.map(a=>a.c+":"+a.d).join(" | "),r.comments,fmtD(r.dateValidation),fmtD(r.dateDocs),fmtD(r.dateNote),fmtD(r.dateEnreg),fmtD(r.dateFactDouane),fmtD(r.dateBAE),fmtD(r.dateMise),fmtD(r.dateRetour),fmtD(r.dateFactInt),fmtD(r.dateValidFinal),fmtD(r.dateArchivage)].map(q).join(";")).join("\n");
+  return [r.crit,r.score,r.dossier,r.com,r.metier,r.sousMetier,r.client,r.sousCompte,r.designation,fmtD(r.dateETA),r.delaiETA,fmtD(r.dateRTA),r.delaiRTA,r.etape,r.alerts.map(a=>a.c+":"+a.d).join(" | "),r.comments,fmtD(r.dateValidation),fmtD(r.dateDocs),fmtD(r.dateNote),fmtD(r.dateEnreg),fmtD(r.dateFactDouane),fmtD(r.dateBAE),fmtD(r.dateMise),fmtD(r.dateRetour),fmtD(r.dateFactInt),fmtD(r.dateValidFinal),fmtD(r.dateArchivage)].map(q).join(";");
+}
+/* Export volume complet : construction par blocs, aucune troncature, tout en local */
+function toCSV(rows){
+  const head="crit;score;dossier;com;metier;sousMetier;client;sousCompte;designation;eta;delaiETA;rta;delaiRTA;etape;alertes;commentaires;validation;docs;note;enreg;factDouane;bae;mise;retour;factInt;validFinal;archivage";
+  const CH=2000, parts=[head];
+  for(let i=0;i<rows.length;i+=CH){
+    const blk=[];
+    for(let j=i;j<Math.min(i+CH,rows.length);j++) blk.push(csvLine(rows[j]));
+    parts.push(blk.join("\n"));
+  }
+  return parts.join("\n");
 }
 function download(name,content,type){ const b=new Blob([content],{type}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
 function exportXLSX(name, rows){
@@ -599,7 +684,7 @@ function exportXLSX(name, rows){
     ws["!cols"]=[{wch:10},{wch:7},{wch:14},{wch:14},{wch:8},{wch:10},{wch:28},{wch:12},{wch:24},{wch:12},{wch:9},{wch:12},{wch:9},{wch:22},{wch:50},{wch:50},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:12}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"SPOT");
     XLSX.writeFile(wb,name);
-    toast(`⬇ <b>${esc(name)}</b> exporté (${rows.length} lignes, XLSX)`);
+    toast(`⬇ <b>${esc(name)}</b> — export intégral : <b>${rows.length.toLocaleString("fr-FR")} lignes</b>, aucune troncature`);
   }catch(e){ console.error(e); toast("❌ Export XLSX impossible : "+e.message); }
 }
 /* ---------- E-mail situation par COM (100% local via messagerie) ---------- */
@@ -657,10 +742,17 @@ async function init(){
   $("#mailCopy").onclick=()=>{ navigator.clipboard?.writeText($("#mailBody").value); toast("📋 Corps de l'e-mail copié"); };
   $("#mailCsv").onclick=()=>{ download(`spot_situation_${MAIL_COM}.csv`,"﻿"+toCSV(S.enriched.filter(r=>r.com===MAIL_COM)),"text/csv"); };
   $("#mailOpen").onclick=()=>{ const to=$("#mailTo").value.trim(), su=$("#mailSubject").value, bo=$("#mailBody").value; window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(bo)}`; toast("📧 Messagerie ouverte — joignez le CSV du COM"); };
-  ["fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fEta1","fEta2","fStep"].forEach(id=>$("#"+id).addEventListener("change",()=>{S.pageMain=0;renderMain();}));
+  ["fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fEta1","fEta2","fStep","fMonth","fYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{
+    if(id==="fCom") F.com=el.value; else if(id==="fMetier") F.metier=el.value; else if(id==="fCrit") F.crit=el.value;
+    else if(id==="fMonth") F.month=el.value; else if(id==="fYear") F.year=el.value;
+    if(["fCom","fMetier","fCrit","fMonth","fYear"].includes(id)){ setSelect($("#gCom"),F.com); setSelect($("#gMetier"),F.metier); setSelect($("#gCrit"),F.crit); setSelect($("#gMonth"),F.month); setSelect($("#gYear"),F.year); }
+    S.pageMain=0; renderAll();
+  });});
+  ["gCom","gMetier","gCrit","gMonth","gYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={gCom:"com",gMetier:"metier",gCrit:"crit",gMonth:"month",gYear:"year"}[id]; setF(k,el.value); });});
+  $("#gClear").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
   $("#fSearch").addEventListener("input",()=>{S.pageMain=0;renderMain();});
   $("#alertSearch").addEventListener("input",()=>{S.pageAlert=0;renderAlertTable();});
-  $("#alertCom").addEventListener("change",()=>{S.pageAlert=0;renderAlertTable();});
+  ["alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{S.pageAlert=0;renderAlertTable();});});
   $("#alertSort").addEventListener("change",e=>{S.sortAlert.k={crit:"crit",eta:"eta",rta:"rta",stagn:"stagn"}[e.target.value]||"crit";S.pageAlert=0;renderAlertTable();});
   $$("#sevChips .chip").forEach(c=>c.onclick=()=>{$$("#sevChips .chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");S.sevFilter=c.dataset.sev;S.pageAlert=0;renderAlertTable();});
   $("#mainPrev").onclick=()=>{S.pageMain=Math.max(0,S.pageMain-1);renderMain();};
@@ -669,30 +761,34 @@ async function init(){
   $("#alertNext").onclick=()=>{S.pageAlert++;renderAlertTable();};
   $$("#mainTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortMain.dir=S.sortMain.k===k?-S.sortMain.dir:-1;S.sortMain.k=k;renderMain();});
   $$("#alertTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortAlert.dir=-1;S.sortAlert.k=k;S.pageAlert=0;renderAlertTable();});
-  $("#btnClearF").onclick=()=>{["fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch"].forEach(id=>$("#"+id).value="");S.pageMain=0;renderMain();};
-  $("#btnCsv").onclick=()=>download("spot_dossiers_filtres.csv","﻿"+toCSV(filteredMain()),"text/csv");
+  $("#btnClearF").onclick=()=>{clearAllFilters();};
+  const fullToast=n=>`⬇ Export intégral : <b>${n.toLocaleString("fr-FR")} lignes</b> — aucune troncature (100% local)`;
+  $("#btnCsv").onclick=()=>{const r=filteredMain(); download("spot_dossiers_filtres.csv","﻿"+toCSV(r),"text/csv"); toast(fullToast(r.length));};
   $("#btnXlsx").onclick=()=>exportXLSX("spot_dossiers_filtres.xlsx",filteredMain());
-  $("#btnJson").onclick=()=>download("spot_dossiers_filtres.json",JSON.stringify(filteredMain(),null,1),"application/json");
-  $("#alertExport").onclick=()=>download("spot_alertes.csv","﻿"+toCSV(filteredAlerts().map(x=>x.r)),"text/csv");
+  $("#btnJson").onclick=()=>{const r=filteredMain(); download("spot_dossiers_filtres.json",JSON.stringify(r),"application/json"); toast(fullToast(r.length));};
+  $("#alertExport").onclick=()=>{const r=filteredAlerts().map(x=>x.r); download("spot_alertes.csv","﻿"+toCSV(r),"text/csv"); toast(fullToast(r.length));};
   $("#alertExportX").onclick=()=>exportXLSX("spot_alertes.xlsx",filteredAlerts().map(x=>x.r));
   $("#perfExport").onclick=()=>{const t=$("#perfTable");let csv="COM;Dossiers;Critique+Haute;Score;Verdict\n";$$("#perfTable tbody tr").forEach(tr=>{csv+=[...tr.children].slice(0,4).map(td=>td.innerText.replace(/\n/g," ")).join(";")+"\n";});download("spot_performance_com.csv","﻿"+csv,"text/csv");};
   $("#perfExportX").onclick=()=>{ const by={}; S.enriched.forEach(r=>{const k=r.com||"(vide)";(by[k]=by[k]||{n:0,sc:0,crit:0});by[k].n++;by[k].sc+=r.score;by[k].crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0;}); const data=Object.entries(by).map(([k,v])=>({"COM":k,"Dossiers":v.n,"% Crit+Haute":Math.round(v.crit/v.n*100),"Score moyen":(v.sc/v.n).toFixed(1)})); const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"COM"); XLSX.writeFile(wb,"spot_performance_com.xlsx"); toast("⬇ Performance COM exportée (XLSX)"); };
-  $("#btnExport").onclick=()=>{const m=$("#mainFilters");download("spot_export_"+(S.fileName||"demo")+".csv","﻿"+toCSV(filteredMain()),"text/csv");toast("⬇ Export CSV des dossiers filtrés");};
+  $("#btnExport").onclick=()=>{const r=filteredMain(); download("spot_export_"+(S.fileName||"cockpit").replace(/\.[^.]+$/,"")+".csv","﻿"+toCSV(r),"text/csv"); toast(fullToast(r.length));};
+  $("#comDetailSee").onclick=()=>{ if(S.selCom) setF("com",S.selCom); goto("dossiers"); };
+  $("#comDetailCsv").onclick=()=>{ if(!S.selCom) return; const r=S.enriched.filter(x=>x.com===S.selCom); download(`spot_situation_${S.selCom}.csv`,"﻿"+toCSV(r),"text/csv"); toast(fullToast(r.length)); };
+  $("#comDetailXlsx").onclick=()=>{ if(S.selCom) exportXLSX(`spot_situation_${S.selCom}.xlsx`,S.enriched.filter(x=>x.com===S.selCom)); };
+  $("#comDetailMail").onclick=()=>{ if(S.selCom) openMailModal(S.selCom); };
   $("#btnReset").onclick=async()=>{ if(!confirm("Effacer les données locales ?"))return; S.rows=[];S.enriched=[];S.fileName="";await IDB.del("dossiers");localStorage.removeItem("spot_mapping");localStorage.removeItem("spot_file");fillSelects();renderAll();toast("🗑 Données locales effacées"); };
   $("#btnImport").onclick=()=>$("#fileInput").click();
   $("#fileInput").onchange=e=>readFile(e.target.files[0]);
   $("#fileInput2").onchange=e=>readFile(e.target.files[0]);
   const dz=$("#dropZone"); ["dragover","dragenter"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("over");})); ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("over");})); dz.addEventListener("drop",e=>readFile(e.dataTransfer.files[0]));
-  $("#btnDemo").onclick=()=>{ S.rows=demoRows(); S.fileName="demo-220-dossiers.xlsx"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); toast("🎯 <b>Jeu démo 220 dossiers</b> chargé (local). Chargez votre Excel pour le réel."); };
   await IDB.open();
-  // restauration locale
+  // restauration locale — aucune donnée factice : sans fichier, état vide + appel au chargement
   try{
     const saved=await IDB.get("dossiers");
     const mp=localStorage.getItem("spot_mapping"); if(mp) S.mapping=JSON.parse(mp);
     const fn=localStorage.getItem("spot_file");
     if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); $("#loadStatus").textContent=S.enriched.length.toLocaleString("fr-FR")+" dossiers restaurés (local) • "+S.fileName; toast("💾 Données locales restaurées : "+S.enriched.length.toLocaleString("fr-FR")+" dossiers."); }
-    else { S.rows=demoRows(); S.fileName="demo-220-dossiers.xlsx"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); }
-  }catch{ S.rows=demoRows(); S.fileName="demo.xlsx"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); }
+    else { fillSelects(); renderAll(); $("#loadStatus").textContent="En attente de votre export Excel — glissez le fichier ici."; }
+  }catch{ fillSelects(); renderAll(); }
   renderAll();
 }
 document.readyState==="loading"?document.addEventListener("DOMContentLoaded",init):init();

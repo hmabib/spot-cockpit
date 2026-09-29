@@ -3,7 +3,7 @@
 Outil de pilotage quotidien sur base de l'export **« Dossiers par COM »**, charte **AGL (Africa Global Logistics)**.
 **100% local : la donnée reste dans le navigateur.** Déployable **GitHub + Vercel** (statique uniquement).
 
-Nouveau : **Administration** (SLA, seuils, alertes on/off, sévérités, couleurs, jour J), **indicateurs de sévérité cliquables**, **cas préoccupants**, **exports XLSX**, **e-mail de situation par COM**, **commentaires en bulles avec mots-clés surlignés**, **Guide d'usage** in-app (`GUIDE_USAGE.md`).
+Nouveau (v3) : **aucune donnée d'exemple** (état vide sans Excel), **filtres globaux partout** (COM / Métier / **Mois / Année ETA** / Criticité), **exports intégraux sans troncature**, **détail COM enrichi** (KPIs, alertes dominantes, volume mensuel, top dossiers), Administration, e-mails, guide.
 
 ## 1. Démarrage (2 min)
 
@@ -17,9 +17,9 @@ Ou ouvrez `index.html` directement (File → Open). CDN SheetJS requis pour lire
 
 ## 2. Chargement Excel + mapping intelligent
 
-1. Cliquez **📤 Charger Excel** ou glissez `Dossiers par COM (2).xlsx` (~10 Mo, ~17 000 lignes OK).
+1. Cliquez **📤 Charger Excel** ou glissez `Dossiers par COM (2).xlsx` (~10 Mo, ~17 000 lignes et plus, sans limite).
 2. Fenêtre **Mapping intelligent** : correspondance auto (normalisation accents/casse + ~60 synonymes FR/EN) avec pastille confiance. Ajustez si besoin → **Valider & analyser**.
-3. Données stockées en **IndexedDB** (poste uniquement) + mapping en `localStorage`. Rechargées au prochain démarrage.
+3. Données stockées en **IndexedDB en intégralité** (poste uniquement) + mapping en `localStorage`. Rechargées au prochain démarrage. Sans fichier : état vide, aucun chiffre fictif.
 4. Changez la **Date pilotage** (défaut 28/09/2026 = date du rapport) : tous délais/SLA recalculés.
 
 Colonnes attendues (30) : `COM, Métier, Sous-métier, Client, Sous-compte, Désignation, Poids, Unité poids, Numéro dossier, Commentaire 1..5, Date ETA, Délai ETA, Date RTA, Délai RTA, Date validation, Auteur ouverture, Date documents complets, Date validation note de détail, Date enregistrement douane, Date facture douane, Date obtention BAE, Date mise en livraison, Date retour livraison, Date facture intervention, Date validation final, Date archivage`.
@@ -45,14 +45,15 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 
 ## 4. Vues & navigation
 
+- **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité` + compteur de périmètre — appliqués à la synthèse, aux alertes, aux dossiers, aux COM et à la BU.
 - **Vue d'ensemble** : 6 KPI + **4 indicateurs de sévérité cliquables** + 4 jauges SVG + COM en difficulté (cliquable) + étape bloquante + distribution délais + top alertes + **cas préoccupants cliquables**.
-- **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, recherche texte, tri, exports **CSV + XLSX**.
-- **Dossiers** : filtres COM / Métier / Sous-métier / Client / Sous-compte (cascade), recherche textuelle, filtre date ETA, filtre délai, étape/statut, tri, pagination 100, fiche détail (timeline, **commentaires C1–C5 en bulles, mots-clés surlignés**).
-- **Performance COM** : classement, verdict 🔴🟠🟢, **👁 voir / ⬇ CSV / ✉️ e-mail de situation** par COM (objet + corps auto, CSV à joindre).
+- **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
+- **Dossiers** : filtres globaux + Sous-métier / Client / Sous-compte / Mois / Année / recherche textuelle / filtre délai / ETA du…au… / étape, tri, pagination 100, fiche détail (timeline, **commentaires C1–C5 en bulles, mots-clés surlignés**).
+- **Performance COM** : classement + **panneau détail** (6 KPIs, criticité, alertes dominantes cliquables, volume par mois ETA, top 8 dossiers), verdict 🔴🟠🟢, **👁 voir / ⬇ CSV / ✉️ e-mail de situation** par COM.
 - **Vision BU** : par Métier/Sous-métier, top clients à risque, matrice Métier × étape.
 - **Administration** : jour J modifiable (+ Auj./−1j/+1j), SLA, seuils criticité et ETA/RTA, activation/sévérité/poids/seuil/couleur par alerte, couleurs des sévérités. Sauvegarde locale, recalcul instantané.
 - **Guide d'usage** : onglet in-app + `GUIDE_USAGE.md` (rituel 10 min).
-- **Exports** : CSV/XLSX/JSON filtrés + par COM. Impression via navigateur.
+- **Exports** : CSV/XLSX/JSON **intégraux (aucune troncature, volume complet, compteur annoncé)** + par COM. Impression via navigateur.
 
 ## 5. Déploiement GitHub + Vercel (données toujours locales)
 

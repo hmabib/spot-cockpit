@@ -40,7 +40,6 @@
       <button class="btn small" id="btnToday" title="Revenir à aujourd'hui">Auj.</button>
       <button class="btn small" id="btnMinus1" title="Jour précédent">−1j</button>
       <button class="btn small" id="btnPlus1" title="Jour suivant">+1j</button>
-      <button class="btn" id="btnDemo">🎯 Démo <span class="sr">charger jeu démo</span></button>
       <button class="btn primary" id="btnImport">📤 Charger Excel</button>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="sr">
       <button class="btn" id="btnExport">⬇ Export</button>
@@ -52,14 +51,26 @@
     <div class="hero" id="heroBox">
       <div style="flex:1;min-width:260px" class="hero-text">
         <h3>🛰 SPOT Cockpit — outil de pilotage quotidien</h3>
-        <p>Chargez l'export <b>« Dossiers par COM »</b> (Excel). Mapping intelligent automatique, calcul des délais, criticité, alertes cliquables, classement COM, recherche n° dossier, filtres COM / Métier / Sous-métier / Client / Sous-compte / dates. <b>Rien ne quitte ce navigateur.</b></p>
+        <p>Chargez l'export <b>« Dossiers par COM »</b> (Excel). Mapping intelligent automatique, calcul des délais, criticité, alertes cliquables, classement COM, recherche n° dossier, filtres COM / Métier / Sous-métier / Client / Sous-compte / <b>mois / année</b> / dates. <b>Rien ne quitte ce navigateur — exports intégraux, sans troncature.</b></p>
         <div class="legend" style="margin-top:8px"><span><i class="dot" style="background:#d92d20"></i>Critique</span><span><i class="dot" style="background:#e9730c"></i>Haute</span><span><i class="dot" style="background:#ca8a04"></i>Moyenne</span><span><i class="dot" style="background:#12805c"></i>OK</span><span>• Délai ETA/RTA négatif = déjà arrivé, dossier non clôturé</span></div>
       </div>
       <label class="drop" id="dropZone">
         <div style="font-size:26px">📁</div>
-        <div><b>Glissez-déposez votre Excel ici</b><br><span style="font-size:12px;color:#475569">ou cliquez pour parcourir • .xlsx 10 Mo OK • 17 000 lignes supportées</span><br><span id="loadStatus" style="font-size:12px;font-weight:700;color:#0f2a52"></span></div>
+        <div><b>Glissez-déposez votre Excel ici</b><br><span style="font-size:12px;color:#475569">ou cliquez pour parcourir • .xlsx 10 Mo OK • 17 000 lignes et plus, sans limite</span><br><span id="loadStatus" style="font-size:12px;font-weight:700;color:#0f2a52"></span></div>
         <input type="file" id="fileInput2" accept=".xlsx,.xls,.csv">
       </label>
+    </div>
+
+    <!-- FILTRES GLOBAUX — appliqués à toutes les vues -->
+    <div class="gbar" id="globalFilters" title="Filtres globaux : s'appliquent à la vue d'ensemble, aux alertes, aux dossiers, aux performances COM et à la vision BU.">
+      <span class="gbar-title">🔎 Filtres globaux</span>
+      <div class="f-field"><label>COM</label><select id="gCom"><option value="">Tous</option></select></div>
+      <div class="f-field"><label>Métier</label><select id="gMetier"><option value="">Tous</option></select></div>
+      <div class="f-field"><label>Mois (ETA)</label><select id="gMonth"><option value="">Tous</option></select></div>
+      <div class="f-field"><label>Année (ETA)</label><select id="gYear"><option value="">Toutes</option></select></div>
+      <div class="f-field"><label>Criticité</label><select id="gCrit"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>OK</option></select></div>
+      <button class="btn small ghost" id="gClear" title="Réinitialiser tous les filtres">Effacer</button>
+      <span class="pill info" id="gCount">0 dossier</span>
     </div>
 
     <!-- OVERVIEW -->
@@ -82,11 +93,14 @@
     <section class="view" id="view-alertes">
       <div class="card"><div class="card-h"><h3>🚨 Alertes par type — cliquables & filtrables</h3><span class="hint">Cliquez une carte pour filtrer la liste. Re-cliquez pour annuler.</span><div class="chips" id="sevChips" style="margin-left:auto"><button class="chip active" data-sev="">Toutes</button><button class="chip" data-sev="Critique">Critique</button><button class="chip" data-sev="Haute">Haute</button><button class="chip" data-sev="Moyenne">Moyenne</button></div></div>
       <div class="card-b"><div class="alert-types" id="alertTypes"></div>
-      <div class="filters" style="grid-template-columns:repeat(4,1fr);margin-top:4px">
+      <div class="filters" style="grid-template-columns:repeat(6,1fr);margin-top:4px">
         <div class="f-field"><label>Recherche (n° dossier, client, commentaire)</label><input id="alertSearch" placeholder="ex : 26071313, BANANE, RFCV…"></div>
         <div class="f-field"><label>COM</label><select id="alertCom"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Métier</label><select id="alertMetier"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Mois (ETA)</label><select id="alertMonth"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Année (ETA)</label><select id="alertYear"><option value="">Toutes</option></select></div>
         <div class="f-field"><label>Tri</label><select id="alertSort"><option value="crit">Criticité ↓</option><option value="eta">Retard ETA ↓</option><option value="rta">Retard RTA ↓</option><option value="stagn">Stagnation ↓</option></select></div>
-        <div class="f-field"><label>&nbsp;</label><div style="display:flex;gap:6px"><button class="btn small" id="alertExport">⬇ CSV</button><button class="btn small" id="alertExportX">⬇ XLSX</button></div></div>
+        <div class="f-field"><label>Exports (volume complet)</label><div style="display:flex;gap:6px"><button class="btn small" id="alertExport">⬇ CSV</button><button class="btn small" id="alertExportX">⬇ XLSX</button></div></div>
       </div>
       <div class="table-wrap"><table id="alertTable"><thead><tr><th data-k="crit">Criticité ▾</th><th data-k="dossier">N° dossier</th><th data-k="com">COM</th><th data-k="client">Client</th><th>Type alerte</th><th>Détail / écart</th><th data-k="eta">ETA / Délai</th><th>Commentaires</th><th></th></tr></thead><tbody></tbody></table></div>
       <div class="pager"><span id="alertPagerInfo"></span><button class="btn small" id="alertPrev">←</button><button class="btn small" id="alertNext">→</button></div>
@@ -102,6 +116,8 @@
         <div class="f-field"><label>Client</label><select id="fClient"><option value="">Tous</option></select></div>
         <div class="f-field"><label>Sous-compte</label><select id="fSousCpte"><option value="">Tous</option></select></div>
         <div class="f-field"><label>Criticité</label><select id="fCrit"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>OK</option></select></div>
+        <div class="f-field"><label>Mois (ETA)</label><select id="fMonth"><option value="">Tous</option></select></div>
+        <div class="f-field"><label>Année (ETA)</label><select id="fYear"><option value="">Toutes</option></select></div>
         <div class="f-field search-wide"><label>Recherche textuelle (n° dossier, client, désignation, commentaires, auteur)</label><input id="fSearch" placeholder="Tapez : n° dossier, client, SOUMAHO4, RFCV, BANANE…"></div>
         <div class="f-field"><label>Filtre délai</label><select id="fDelay"><option value="">Tous</option><option value="etaLate">ETA dépassée (délai &lt; 0)</option><option value="etaCrit">ETA critique (&lt; -7j)</option><option value="rtaLate">RTA dépassée</option><option value="rtaCrit">RTA critique (&lt; -7j)</option><option value="stagn">Stagnation &gt; SLA</option><option value="blocked">Bloqué BAE/livraison</option></select></div>
         <div class="f-field"><label>ETA du … au …</label><div style="display:flex;gap:6px"><input type="date" id="fEta1" style="width:100%"><input type="date" id="fEta2" style="width:100%"></div></div>
@@ -121,6 +137,13 @@
       <div class="kpi-grid" id="perfKpis" style="grid-template-columns:repeat(4,1fr)"></div>
       <div class="card"><div class="card-h"><h3>🏆 Classement des COM — performance vs difficulté</h3><span class="hint">Score = criticité moyenne pondérée + retards + stagnation. Cliquez un COM pour voir ses dossiers. ✉️ pour envoyer sa situation par e-mail.</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" id="perfExport">⬇ CSV</button><button class="btn small" id="perfExportX">⬇ XLSX</button></span></div>
       <div class="table-wrap"><table id="perfTable"><thead><tr><th>COM</th><th>Dossiers</th><th>% Critique+Haute</th><th>Score difficulté</th><th>Retard ETA médian</th><th>Taux BAE</th><th>Taux archivage</th><th>Verdict</th><th>Situation</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="card"><div class="card-h"><h3>🔍 Détail COM — <span id="comDetailName">—</span></h3><span class="hint">Cliquez une ligne du classement pour changer de COM</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" id="comDetailSee">👁 Dossiers</button><button class="btn small" id="comDetailCsv">⬇ CSV</button><button class="btn small" id="comDetailXlsx">⬇ XLSX</button><button class="btn small primary" id="comDetailMail">✉️ E-mail</button></span></div>
+      <div class="card-b"><div class="kpi-grid" id="comDetailKpis" style="grid-template-columns:repeat(6,1fr)"></div>
+      <div class="panels"><div class="card"><div class="card-h"><h3>Répartition criticité</h3></div><div class="card-b"><div class="bars" id="comDetailSev"></div></div></div>
+      <div class="card"><div class="card-h"><h3>Alertes dominantes</h3></div><div class="card-b"><div class="bars" id="comDetailAlerts"></div></div></div></div>
+      <div class="card"><div class="card-h"><h3>Volume par mois (ETA)</h3></div><div class="card-b"><div class="bars" id="comDetailMonths"></div></div></div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>Top dossiers du COM</h3></div><div class="table-wrap" style="max-height:340px"><table id="comDetailTable"><thead><tr><th>Score</th><th>N° dossier</th><th>Client</th><th>ETA / Délai</th><th>Étape</th><th>Alertes</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div></div>
+      </div></div>
     </section>
 
     <!-- BU -->

@@ -109,6 +109,14 @@ a{color:var(--agl-blue)}
 @media(max-width:900px){.admin-grid{grid-template-columns:1fr}}
 .guide-step{background:#f8faff;border:1px solid #dfe6f0;border-radius:12px;padding:11px 13px;margin-bottom:9px}
 .guide-step b{color:var(--agl-navy)}
+/* global filter bar — visible on all views */
+.gbar{position:sticky;top:64px;z-index:15;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border:1px solid var(--agl-line);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;box-shadow:var(--shadow-sm);margin-bottom:14px}
+.gbar .f-field{min-width:130px;flex:1}
+.gbar-title{font-weight:800;color:var(--agl-navy);font-size:13px;padding-bottom:9px;white-space:nowrap}
+.empty-state{text-align:center;padding:34px 18px;color:var(--agl-muted)}
+.empty-state b{display:block;font-size:15px;color:var(--agl-navy);margin-bottom:6px}
+#perfTable tr.sel{background:#e9f1ff}
+#perfTable tr.sel:hover{background:#dce8ff}
 .gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:6px 0 14px}
 @media(max-width:1100px){.gauges{grid-template-columns:repeat(2,1fr)}}
 .gauge-card{background:#fff;border:1px solid var(--agl-line);border-radius:14px;padding:14px;text-align:center;box-shadow:var(--shadow-sm)}
