@@ -332,6 +332,35 @@ function commentBubbles(r, query){
     return `<div class="cmt"><div class="cmt-head"><span class="cmt-num">C${i+1}</span></div><p>${hiComment(t,query)}</p></div>`;
   }).join("");
 }
+/* Positionnement des dates : chaque date jalons située vs jour J (pilotage) */
+const DSHORT={ETA:"ETA",RTA:"RTA",validation:"Valid.",docs:"Docs",note:"Note",douane:"Enreg.",factDouane:"Fact.",bae:"BAE",mise:"Mise",retour:"Retour",factInt:"FactInt",validFinal:"ValidFin",archivage:"Archiv."};
+const DLONG={ETA:"ETA (arrivée prévue)",RTA:"RTA",validation:"Validation",docs:"Documents complets",note:"Note de détail",douane:"Enreg. douane",factDouane:"Facture douane",bae:"BAE",mise:"Mise en livraison",retour:"Retour livraison",factInt:"Facture intervention",validFinal:"Validation finale",archivage:"Archivage"};
+function datePositionHTML(r){
+  const P=todayPilot();
+  const pts=[["ETA",r.dateETA],["RTA",r.dateRTA],...STEPS.map(s=>[s.k,r[s.dateKey]])];
+  const dated=pts.filter(([k,d])=>!!d);
+  if(!dated.length) return `<div class="footer-note">🗓 Aucune date renseignée — positionnement impossible.</div>`;
+  const times=dated.map(([k,d])=>d.getTime()).concat([P.getTime()]);
+  const mn=Math.min(...times), mx=Math.max(...times), span=(mx-mn)||86400000;
+  const pct=t=>Math.min(97,Math.max(3,(t-mn)/span*100));
+  const pj=pct(P.getTime());
+  const dots=dated.map(([k,d],i)=>{
+    const t=d.getTime(), off=diffJ(d,P), p=pct(t);
+    const col=t<P.getTime()?"#0f2a52":t>P.getTime()?"#2563eb":sevColor("Critique");
+    const offTxt=off===0?"J":off>0?`J+${off}`:`J${off}`;
+    return `<div class="dpt" style="left:${p.toFixed(1)}%;top:${30+(i%2)*24}px" title="${esc(DLONG[k])} : ${fmtD(d)} (${offTxt})"><div class="ddot" style="background:${col}"></div><div class="dlab">${DSHORT[k]}</div><div class="doff" style="color:${col}">${offTxt}</div></div>`;
+  }).join("");
+  const rows=pts.map(([k,d])=>{
+    if(!d) return `<tr><td>${esc(DLONG[k])}</td><td style="color:#94a3b8">—</td><td><span class="pill grey">en attente</span></td></tr>`;
+    const off=diffJ(d,P);
+    const chip=off<0?`<span class="pill haute">J${off} • passée</span>`:off>0?`<span class="pill info">J+${off} • à venir</span>`:`<span class="pill crit">J • aujourd'hui</span>`;
+    return `<tr><td>${esc(DLONG[k])}</td><td><b>${fmtD(d)}</b></td><td>${chip}</td></tr>`;
+  }).join("");
+  const horizon=Math.round(span/86400000);
+  return `<div class="daxis" title="Axe temporel : ${fmtD(new Date(mn))} → ${fmtD(new Date(mx))}"><div class="jline" style="left:${pj.toFixed(1)}%"></div><div class="jlab" style="left:${pj.toFixed(1)}%">J • ${fmtD(P)}</div>${dots}</div>
+  <div class="legend" style="margin:2px 0 4px"><span><i class="dot" style="background:#0f2a52"></i>passée</span><span><i class="dot" style="background:#2563eb"></i>à venir</span><span><i class="dot" style="background:${sevColor("Critique")}"></i>jour J</span><span>• horizon ${horizon}j (${fmtD(new Date(mn))} → ${fmtD(new Date(mx))})</span></div>
+  <table class="dtable">${rows}</table>`;
+}
 function gaugeSVG(pct,color){
   const r=52, cx=65, cy=62, a0=Math.PI, a1=Math.PI+Math.PI*(Math.max(0,Math.min(100,pct))/100);
   const pt=a=>`${(cx+r*Math.cos(a)).toFixed(1)},${(cy-r*Math.sin(a)).toFixed(1)}`;
@@ -395,7 +424,7 @@ function renderWorry(){
 }
 function renderComBars(){
   const by={}; baseFiltered().forEach(r=>{ const k=r.com||"(vide)"; (by[k]=by[k]||{n:0,sc:0,crit:0}); by[k].n++; by[k].sc+=r.score; by[k].crit+= (r.crit==="Critique"||r.crit==="Haute")?1:0; });
-  const arr=Object.entries(by).map(([k,v])=>({k,...v,avg:v.sc/v.n, rate:v.crit/v.n})).sort((a,b)=>b.avg-a.avg).slice(0,10);
+  const arr=Object.entries(by).map(([k,v])=>({k,...v,avg:v.sc/v.n, rate:v.crit/v.n})).sort((a,b)=>b.avg-a.avg);
   const max=Math.max(1,...arr.map(a=>a.avg));
   $("#comBars").innerHTML=arr.length?arr.map(a=>`<div class="bar-row"><span><b style="cursor:pointer;color:#0f2a52" data-com="${esc(a.k)}">${esc(a.k)}</b><br><span style="color:#64748b">${a.n} dos. • ${Math.round(a.rate*100)}% alertés</span></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(a.avg/max*100)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#2563eb"}"></div></div><b>${a.avg.toFixed(0)}</b></div>`).join(""):(S.enriched.length?'<p style="color:#64748b">Aucun COM sur ce périmètre filtré.</p>':'<div class="empty-state"><b>En attente de données</b>Chargez votre export Excel pour voir les COM en difficulté.</div>');
   $$("#comBars [data-com]").forEach(el=>el.onclick=()=>{ setF("com",el.dataset.com); goto("dossiers"); });
@@ -475,8 +504,8 @@ function renderPerfs(){
 function renderComDetail(){
   const com=S.selCom;
   $("#comDetailName").textContent=com||"—";
-  const body=$("#comDetailKpis"), sev=$("#comDetailSev"), al=$("#comDetailAlerts"), mo=$("#comDetailMonths"), tb=$("#comDetailTable tbody");
-  if(!com){ body.innerHTML=""; sev.innerHTML="<p style='color:#64748b'>—</p>"; al.innerHTML=""; mo.innerHTML=""; tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><b>Sélectionnez un COM</b>Cliquez une ligne du classement.</div></td></tr>'; return; }
+  const body=$("#comDetailKpis"), sev=$("#comDetailSev"), al=$("#comDetailAlerts"), mo=$("#comDetailMonths"), st=$("#comDetailStages"), tb=$("#comDetailTable tbody");
+  if(!com){ body.innerHTML=""; sev.innerHTML="<p style='color:#64748b'>—</p>"; al.innerHTML=""; mo.innerHTML=""; st.innerHTML=""; tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><b>Sélectionnez un COM</b>Cliquez une ligne du classement.</div></td></tr>'; return; }
   const rows=baseFiltered().filter(r=>r.com===com);
   const n=rows.length||1;
   const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length, moy=rows.filter(r=>r.crit==="Moyenne").length, ok=rows.filter(r=>r.crit==="OK").length;
@@ -498,8 +527,18 @@ function renderComDetail(){
   al.innerHTML=arrA.length?arrA.map(([k,v])=>{const d=alertDef(k);return `<div class="bar-row"><span style="cursor:pointer" data-al="${k}" title="${esc(d.h)}"><b style="color:${d.c}">${k}</b> ${esc(d.t.slice(0,26))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxA*100)}%;background:${d.c}"></div></div><b>${v}</b></div>`;}).join(""):"<p style='color:#64748b'>Aucune alerte sur ce périmètre. ✔</p>";
   $$("#comDetailAlerts [data-al]").forEach(el=>el.onclick=()=>{ S.alertFilter=el.dataset.al; S.pageAlert=0; goto("alertes"); renderAlertTypes(); renderAlertTable(); });
   const byM={}; rows.forEach(r=>{ if(r.etaYM) byM[r.etaYM]=(byM[r.etaYM]||0)+1; });
-  const arrM=Object.entries(byM).sort().slice(-8); const mxM=Math.max(1,...arrM.map(x=>x[1]),1);
+  const arrM=Object.entries(byM).sort(); const mxM=Math.max(1,...arrM.map(x=>x[1]),1);
   mo.innerHTML=arrM.length?arrM.map(([k,v])=>`<div class="bar-row"><span>${ymLabel(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxM*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join(""):"<p style='color:#64748b'>Pas de mois ETA renseignés.</p>";
+  /* délais moyens entre étapes consécutives (positionnement process du COM) */
+  const pairs=[]; for(let i=0;i<STEPS.length-1;i++) pairs.push([STEPS[i],STEPS[i+1]]);
+  const avgs=pairs.map(([a,b])=>{
+    let s=0,n=0; rows.forEach(r=>{ const d1=r[a.dateKey],d2=r[b.dateKey]; if(d1&&d2){ const d=diffJ(d2,d1); if(d!=null&&d>=0){s+=d;n++;} } });
+    return {l:`${a.label} → ${b.label}`, avg:n?s/n:null, n, sla:CFG.sla[b.k]??null};
+  });
+  const mxS=Math.max(1,...avgs.map(x=>x.avg||0));
+  st.innerHTML=avgs.map(x=>x.avg==null
+    ?`<div class="bar-row"><span>${esc(x.l)}</span><div class="bar-track"></div><b style="color:#94a3b8">—</b></div>`
+    :`<div class="bar-row"><span>${esc(x.l)}${x.sla!=null&&x.avg>x.sla?' <b class="late">⚠</b>':""}<br><small style="color:#64748b">SLA ${x.sla??"—"}j • n=${x.n}</small></span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.avg/mxS*100)}%;background:${x.sla!=null&&x.avg>x.sla?sevColor("Critique"):"#0f2a52"}"></div></div><b>${x.avg.toFixed(1)}j</b></div>`).join("");
   const top=[...rows].sort((a,b)=>b.score-a.score).slice(0,8);
   const q=norm($("#fSearch")?.value||"");
   tb.innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:200px;font-size:12px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
@@ -508,11 +547,12 @@ function renderComDetail(){
 function renderBU(){
   const E=baseFiltered();
   const byM={}; E.forEach(r=>{const k=r.metier||"(vide)";byM[k]=(byM[k]||0)+1;});
-  const arrM=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,8); const max=Math.max(1,...arrM.map(a=>a[1]));
+  const arrM=Object.entries(byM).sort((a,b)=>b[1]-a[1]); const max=Math.max(1,...arrM.map(a=>a[1]));
   $("#buBars").innerHTML=arrM.length?arrM.map(([k,v])=>`<div class="bar-row"><span>Métier ${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join(""):"<div class='empty-state'><b>Aucune donnée</b>Chargez votre export Excel.</div>";
   const byC={}; E.forEach(r=>{if(r.crit==="Critique"||r.crit==="Haute"){const k=r.client||"(vide)";byC[k]=(byC[k]||0)+1;}});
-  const arrC=Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,8); const maxC=Math.max(1,...arrC.map(a=>a[1]));
+  const arrC=Object.entries(byC).sort((a,b)=>b[1]-a[1]); const maxC=Math.max(1,...arrC.map(a=>a[1]));
   $("#clientBars").innerHTML=(arrC.map(([k,v])=>`<div class="bar-row"><span>${esc(k.slice(0,24))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxC*100)}%;background:#d92d20"></div></div><b>${v}</b></div>`).join(""))||"<p style='color:#64748b'>—</p>";
+  const cc=$("#clientCount"); if(cc) cc.textContent=`(${arrC.length} clients)`;
   const mets=[...new Set(E.map(r=>r.metier||"(vide)"))].slice(0,12);
   $("#buMatrix tbody").innerHTML=mets.map(m=>{const rows=E.filter(r=>(r.metier||"(vide)")===m);const c=k=>rows.filter(r=>r.etapeKey===k||(k==="archive"&&r.dateArchivage)).length;return `<tr><td><b>${esc(m)}</b></td><td>${rows.length}</td><td>${c("validation")}</td><td>${c("docs")}</td><td>${c("note")}</td><td>${c("douane")}</td><td>${c("bae")}</td><td>${c("mise")+c("retour")}</td><td>${c("factInt")+c("validFinal")}</td><td>${rows.filter(r=>r.dateArchivage).length}</td></tr>`;}).join("")||'<tr><td colspan="10"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel.</div></td></tr>';
 }
@@ -567,9 +607,9 @@ function renderGuide(){
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
   <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité) s'applique à <b>toutes les vues</b> : synthèse, alertes, dossiers, COM, BU. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
-  <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM, ouvrez la fiche, lisez la timeline + stagnations &gt; SLA + commentaires C1–C5.</div>
-  <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement + <b>panneau détail</b> (KPIs du COM, criticité, alertes dominantes, volume par mois ETA, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ <b>envoyer la situation par e-mail</b> (objet + corps prêts, CSV à joindre).</div>
-  <div class="guide-step"><b>6. Exporter sans limite.</b> Dossiers : <code>CSV / XLSX / JSON</code> filtrés — <b>volume complet, aucune troncature</b> (construction par blocs, 100% local). Alertes : CSV/XLSX de la sélection. Par COM depuis sa vue. Impression via <code>🖨</code>.</div>
+  <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
+  <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement <b>complet</b> + <b>panneau détail</b> (KPIs, criticité, alertes dominantes, volume mensuel <b>complet</b>, <b>délais moyens entre étapes vs SLA</b>, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ e-mail.</div>
+  <div class="guide-step"><b>6. Exporter sans limite.</b> <b>Toutes les listes sont intégrales</b> (COM, métiers, clients, mois, matrice BU) ; seuls les tableaux de dossiers/alertes sont <b>paginés</b> (100 à 1000 lignes/page réglables) pour rester fluides. Exports <code>CSV / XLSX / JSON</code> : volume complet, compteur annoncé, aucune troncature.</div>
   <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A10, activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
   <div class="guide-step"><b>8. Rituel quotidien conseillé (10 min).</b> Charger Excel → vérifier date → lire indicateurs → traiter 🔴 puis 🟠 → envoyer situations COM en difficulté → exporter la sélection du jour.</div>
   <div class="footer-note">🔒 Confidentialité : lecture Excel dans le navigateur (SheetJS), stockage IndexedDB + localStorage sur ce poste. E-mails via votre messagerie (mailto, aucune donnée envoyée par l'app). Déploiement Vercel = fichiers statiques.</div>`;
@@ -588,6 +628,8 @@ function openDrawer(i){
     <div class="chips" style="margin-bottom:8px">${r.alerts.map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}">${a.c}</span>`).join("")||'<span class="pill ok">Aucune alerte</span>'}</div>
     ${r.alerts.map(a=>`<div style="background:${a.c==="A1"||a.c==="A3"||a.c==="A6"?"#fdecec":"#fff7ed"};border:1px solid #f0d9c8;border-radius:10px;padding:8px 10px;margin-bottom:6px"><b>${a.c} — ${esc(ALERT_DEFS[a.c].t)}</b><br><span style="font-size:12.5px">${esc(a.d)}</span></div>`).join("")}
     ${invTxt}${stagTxt}
+    <h4 style="margin:12px 0 4px">🗓 Positionnement dates — jalons situés vs jour J (${fmtD(todayPilot())})</h4>
+    ${datePositionHTML(r)}
     <h4 style="margin:12px 0 4px">🧾 Fiche</h4>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12.5px;background:#f8faff;border:1px solid #dfe6f0;border-radius:10px;padding:10px">
       <div><b>COM</b><br>${esc(r.com||"—")}</div><div><b>Auteur</b><br>${esc(r.auteur||"—")}</div>
@@ -759,6 +801,9 @@ async function init(){
   $("#mainNext").onclick=()=>{S.pageMain++;renderMain();};
   $("#alertPrev").onclick=()=>{S.pageAlert=Math.max(0,S.pageAlert-1);renderAlertTable();};
   $("#alertNext").onclick=()=>{S.pageAlert++;renderAlertTable();};
+  const syncPP=v=>{ S.perPage=+v||100; setSelect($("#mainPerPage"),String(S.perPage)); setSelect($("#alertPerPage"),String(S.perPage)); S.pageMain=0; S.pageAlert=0; renderMain(); renderAlertTable(); };
+  $("#mainPerPage").onchange=e=>syncPP(e.target.value);
+  $("#alertPerPage").onchange=e=>syncPP(e.target.value);
   $$("#mainTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortMain.dir=S.sortMain.k===k?-S.sortMain.dir:-1;S.sortMain.k=k;renderMain();});
   $$("#alertTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortAlert.dir=-1;S.sortAlert.k=k;S.pageAlert=0;renderAlertTable();});
   $("#btnClearF").onclick=()=>{clearAllFilters();};

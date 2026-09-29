@@ -103,7 +103,7 @@
         <div class="f-field"><label>Exports (volume complet)</label><div style="display:flex;gap:6px"><button class="btn small" id="alertExport">⬇ CSV</button><button class="btn small" id="alertExportX">⬇ XLSX</button></div></div>
       </div>
       <div class="table-wrap"><table id="alertTable"><thead><tr><th data-k="crit">Criticité ▾</th><th data-k="dossier">N° dossier</th><th data-k="com">COM</th><th data-k="client">Client</th><th>Type alerte</th><th>Détail / écart</th><th data-k="eta">ETA / Délai</th><th>Commentaires</th><th></th></tr></thead><tbody></tbody></table></div>
-      <div class="pager"><span id="alertPagerInfo"></span><button class="btn small" id="alertPrev">←</button><button class="btn small" id="alertNext">→</button></div>
+      <div class="pager"><span id="alertPagerInfo"></span><label style="display:flex;gap:6px;align-items:center">Afficher <select id="alertPerPage"><option>100</option><option>200</option><option>500</option><option>1000</option></select> / page</label><button class="btn small" id="alertPrev">←</button><button class="btn small" id="alertNext">→</button></div>
       </div></div>
     </section>
 
@@ -128,7 +128,7 @@
       <div class="table-wrap"><table id="mainTable"><thead><tr>
         <th data-k="crit">Crit ⚠</th><th data-k="dossier">N° dossier</th><th data-k="com">COM</th><th data-k="client">Client</th><th data-k="eta">ETA / Délai</th><th data-k="rta">RTA / Délai</th><th data-k="etape">Étape</th><th>Dates clés</th><th>Alertes</th>
       </tr></thead><tbody></tbody></table></div>
-      <div class="pager"><span id="mainPagerInfo"></span><button class="btn small" id="mainPrev">←</button><button class="btn small" id="mainNext">→</button></div>
+      <div class="pager"><span id="mainPagerInfo"></span><label style="display:flex;gap:6px;align-items:center">Afficher <select id="mainPerPage"><option>100</option><option>200</option><option>500</option><option>1000</option></select> / page</label><button class="btn small" id="mainPrev">←</button><button class="btn small" id="mainNext">→</button></div>
       </div>
     </section>
 
@@ -141,7 +141,8 @@
       <div class="card-b"><div class="kpi-grid" id="comDetailKpis" style="grid-template-columns:repeat(6,1fr)"></div>
       <div class="panels"><div class="card"><div class="card-h"><h3>Répartition criticité</h3></div><div class="card-b"><div class="bars" id="comDetailSev"></div></div></div>
       <div class="card"><div class="card-h"><h3>Alertes dominantes</h3></div><div class="card-b"><div class="bars" id="comDetailAlerts"></div></div></div></div>
-      <div class="card"><div class="card-h"><h3>Volume par mois (ETA)</h3></div><div class="card-b"><div class="bars" id="comDetailMonths"></div></div></div>
+      <div class="card"><div class="card-h"><h3>Volume par mois (ETA) — tous</h3></div><div class="card-b"><div class="bars" id="comDetailMonths"></div></div></div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>⏱ Délais moyens entre étapes (jours) — positionnement du COM dans le process</h3><span class="hint">Moyenne constatée sur les dossiers du COM ayant les 2 dates</span></div><div class="card-b"><div class="bars" id="comDetailStages"></div></div></div>
       <div class="card" style="margin-top:12px"><div class="card-h"><h3>Top dossiers du COM</h3></div><div class="table-wrap" style="max-height:340px"><table id="comDetailTable"><thead><tr><th>Score</th><th>N° dossier</th><th>Client</th><th>ETA / Délai</th><th>Étape</th><th>Alertes</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div></div>
       </div></div>
     </section>
@@ -149,7 +150,7 @@
     <!-- BU -->
     <section class="view" id="view-bu">
       <div class="panels"><div class="card"><div class="card-h"><h3>🏢 Vision par Section (BU) — Métier / Sous-métier</h3></div><div class="card-b"><div class="bars" id="buBars"></div></div></div>
-      <div class="card"><div class="card-h"><h3>👥 Top clients à risque</h3></div><div class="card-b"><div class="bars" id="clientBars"></div></div></div></div>
+      <div class="card"><div class="card-h"><h3>👥 Clients à risque — tous <span class="hint" id="clientCount"></span></h3></div><div class="card-b"><div class="bars" id="clientBars"></div></div></div></div>
       <div class="card"><div class="card-h"><h3>📊 Matrice Métier × Étape bloquante</h3></div><div class="table-wrap"><table id="buMatrix"><thead><tr><th>Métier</th><th>Dossiers</th><th>Valid.</th><th>Docs</th><th>Note</th><th>Douane</th><th>BAE</th><th>Livr.</th><th>Clôture</th><th>Archivé</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 

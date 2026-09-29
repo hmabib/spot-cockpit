@@ -3,7 +3,7 @@
 Outil de pilotage quotidien sur base de l'export **« Dossiers par COM »**, charte **AGL (Africa Global Logistics)**.
 **100% local : la donnée reste dans le navigateur.** Déployable **GitHub + Vercel** (statique uniquement).
 
-Nouveau (v3) : **aucune donnée d'exemple** (état vide sans Excel), **filtres globaux partout** (COM / Métier / **Mois / Année ETA** / Criticité), **exports intégraux sans troncature**, **détail COM enrichi** (KPIs, alertes dominantes, volume mensuel, top dossiers), Administration, e-mails, guide.
+Nouveau (v4) : **zéro limite d'affichage** (COM/métiers/clients/mois/matrice intégraux + 100→1000 lignes/page), **🗓 positionnement dates** (axe J±n par dossier + délais moyens par étape par COM vs SLA).
 
 ## 1. Démarrage (2 min)
 
@@ -48,8 +48,8 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 - **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité` + compteur de périmètre — appliqués à la synthèse, aux alertes, aux dossiers, aux COM et à la BU.
 - **Vue d'ensemble** : 6 KPI + **4 indicateurs de sévérité cliquables** + 4 jauges SVG + COM en difficulté (cliquable) + étape bloquante + distribution délais + top alertes + **cas préoccupants cliquables**.
 - **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
-- **Dossiers** : filtres globaux + Sous-métier / Client / Sous-compte / Mois / Année / recherche textuelle / filtre délai / ETA du…au… / étape, tri, pagination 100, fiche détail (timeline, **commentaires C1–C5 en bulles, mots-clés surlignés**).
-- **Performance COM** : classement + **panneau détail** (6 KPIs, criticité, alertes dominantes cliquables, volume par mois ETA, top 8 dossiers), verdict 🔴🟠🟢, **👁 voir / ⬇ CSV / ✉️ e-mail de situation** par COM.
+- **Dossiers** : filtres globaux + Sous-métier / Client / Sous-compte / Mois / Année / recherche textuelle / filtre délai / ETA du…au… / étape, tri, **pagination 100→1000 réglable**, fiche détail (timeline, **🗓 positionnement dates J±n**, **commentaires C1–C5 en bulles, mots-clés surlignés**).
+- **Performance COM** : classement **intégral** + **panneau détail** (6 KPIs, criticité, alertes dominantes cliquables, volume mensuel intégral, **délais moyens entre étapes vs SLA**, top 8 dossiers), verdict 🔴🟠🟢, **👁 voir / ⬇ CSV / ✉️ e-mail de situation** par COM.
 - **Vision BU** : par Métier/Sous-métier, top clients à risque, matrice Métier × étape.
 - **Administration** : jour J modifiable (+ Auj./−1j/+1j), SLA, seuils criticité et ETA/RTA, activation/sévérité/poids/seuil/couleur par alerte, couleurs des sévérités. Sauvegarde locale, recalcul instantané.
 - **Guide d'usage** : onglet in-app + `GUIDE_USAGE.md` (rituel 10 min).

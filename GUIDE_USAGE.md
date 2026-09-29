@@ -30,17 +30,17 @@ La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Crit
 ## 5. Traiter les alertes (clic → cas)
 1. Onglet **Alertes** : 10 cartes `A1…A10` avec icône, sévérité, compteur (périmètre global respecté). **Cliquez** = filtrer, re-cliquez = annuler. Grisées = désactivées dans Administration.
 2. Filtres : sévérité (pastilles), COM, Métier, **Mois/Année ETA**, recherche texte (`n° dossier, client, RFCV, BL…`), tri (criticité / ETA / RTA / stagnation).
-3. Cliquez une ligne → **fiche dossier** : score, alertes détaillées, timeline process, stagnations > SLA, inversions, **commentaires C1–C5 en bulles** (mots-clés RFCV/BL/BAE surlignés, vides signalés).
+3. Cliquez une ligne → **fiche dossier** : score, alertes détaillées, **🗓 positionnement dates** (axe temporel : chaque jalon ETA→archivage situé en J±n vs jour J + tableau exact), timeline process, stagnations > SLA, inversions, **commentaires C1–C5 en bulles** (mots-clés RFCV/BL/BAE surlignés, vides signalés).
 
 ## 6. Piloter par COM (détail + exports + e-mail)
-Onglet **Performance COM** : classement (périmètre global respecté), verdict 🔴🟠🟢, par ligne :
+Onglet **Performance COM** : classement **complet** (tous les COM, scroll), verdict 🔴🟠🟢, par ligne :
 - **👁** voir les dossiers du COM,
 - **⬇** exporter le CSV du COM,
 - **✉️** ouvrir la fenêtre **Situation COM** : destinataire, objet auto (`SPOT [date] — Situation COM …`), corps auto (KPI, 8 cas prioritaires, extraits commentaires, seuils), boutons **Copier**, **⬇ CSV du COM**, **Ouvrir dans ma messagerie** (pensez à joindre le CSV — `mailto:` ne joint pas tout seul).
-- **Panneau détail** sous le classement (clic sur une ligne) : 6 KPIs du COM, répartition criticité, alertes dominantes (cliquables → Alertes), **volume par mois ETA**, top 8 dossiers (clic = fiche), boutons Dossiers/CSV/XLSX/E-mail.
+- **Panneau détail** sous le classement (clic sur une ligne) : 6 KPIs du COM, répartition criticité, alertes dominantes (cliquables → Alertes), **volume par mois ETA (tous les mois)**, **⏱ délais moyens entre étapes vs SLA** (positionnement du COM dans le process), top 8 dossiers (clic = fiche), boutons Dossiers/CSV/XLSX/E-mail.
 
 ## 7. Dossiers : filtres multicritères
-Globaux + `Sous-métier / Client / Sous-compte / Mois / Année / Recherche textuelle / Filtre délai (ETA, RTA, stagnation, blocage BAE) / ETA du…au… / Étape`. Tri en cliquant les en-têtes, pagination 100, **CSV / XLSX / JSON intégraux** des lignes filtrées (compteur annoncé, aucune omission).
+Globaux + `Sous-métier / Client / Sous-compte / Mois / Année / Recherche textuelle / Filtre délai (ETA, RTA, stagnation, blocage BAE) / ETA du…au… / Étape`. Tri en cliquant les en-têtes, **pagination 100 à 1000 lignes/page (réglable)**, **CSV / XLSX / JSON intégraux** des lignes filtrées (compteur annoncé, aucune omission). Toutes les autres listes (COM, métiers, clients, mois, matrice BU) sont **intégrales et scrollables**.
 
 ## 8. Régler les alertes (Administration)
 - **SLA par transition** (jours), **seuils** ETA/RTA critiques et criticité (défaut `≥55 / ≥30 / ≥12`, ETA/RTA `< −7j`).
