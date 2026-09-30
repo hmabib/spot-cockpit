@@ -103,6 +103,7 @@ const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFi
 const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[] };
 /* visibilité multi-critères des types d'alerte : vide = tous visibles */
 function matchTypes(r){ return !F.alertTypes.length || r.alerts.some(a=>F.alertTypes.includes(a.c)); }
+function visibleAlerts(r){ return F.alertTypes.length?r.alerts.filter(a=>F.alertTypes.includes(a.c)):r.alerts; }
 /* Épinglés direction + notes du directeur — persistés en local */
 function loadLocal(){ try{ S.pins=JSON.parse(localStorage.getItem("spot_pins")||"{}")||{}; }catch{ S.pins={}; } try{ S.notes=JSON.parse(localStorage.getItem("spot_notes")||"{}")||{}; }catch{ S.notes={}; } }
 function savePins(){ try{ localStorage.setItem("spot_pins",JSON.stringify(S.pins)); }catch{} }
@@ -281,6 +282,7 @@ function fillSelects(){
 }
 /* Filtres globaux : toute vue = baseFiltered() */
 function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
+  if(!matchTypes(r)) return false;
   const c=comOv!==undefined?comOv:F.com, m=metOv!==undefined?metOv:F.metier;
   const mo=monthOv!==undefined?monthOv:F.month, y=yearOv!==undefined?yearOv:F.year, cr=critOv!==undefined?critOv:F.crit;
   if(c&&r.com!==c) return false;
@@ -434,7 +436,7 @@ function renderKPIs(){
     {t:"Dossiers sains",p:tot?Math.round(E.filter(r=>r.crit==="OK").length/tot*100):0,c:tot&&E.filter(r=>r.crit==="OK").length/tot<.5?"#d92d20":"#12805c",h:"Sans alerte"},
   ];
   $("#gaugeGrid").innerHTML=g.map(x=>`<div class="gauge-card"><h4>${x.t}</h4>${gaugeSVG(x.p,x.c)}<p>${x.h}</p></div>`).join("");
-  $("#navAlertCount").textContent=E.reduce((s,r)=>s+r.alerts.length,0);
+  $("#navAlertCount").textContent=E.reduce((s,r)=>s+visibleAlerts(r).length,0);
   const gc=$("#gCount"); if(gc) gc.textContent=tot.toLocaleString("fr-FR")+" dossier"+(tot>1?"s":"")+" (filtres globaux)";
   renderSevGrid();
   renderWorry();
@@ -546,7 +548,7 @@ function renderTopAlerts(){
 }
 function renderAlertTypes(){
   const counts={}; Object.keys(CFG.alerts).forEach(k=>counts[k]=0);
-  baseFiltered().forEach(r=>r.alerts.forEach(a=>counts[a.c]++));
+  baseFiltered().forEach(r=>visibleAlerts(r).forEach(a=>counts[a.c]++));
   $("#alertTypes").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<div class="alert-type ${S.alertFilter===k?"active":""}${d.on===false?" off":""}" data-t="${k}" style="--c:${d.c};${d.on===false?"opacity:.45;filter:grayscale(.6)":""}" title="${esc(d.h)} — poids ${d.w}, seuil ${d.days}j${d.on===false?" (désactivée — voir Administration)":""}"><small>${d.ico||"•"} ${k} • ${d.sev}${d.on===false?" • OFF":""}</small><b>${counts[k].toLocaleString("fr-FR")}</b><span><b style="font-size:12px">${esc(d.t)}</b><br>${esc(d.h)}</span></div>`).join("");
   $$("#alertTypes .alert-type").forEach(el=>el.onclick=()=>{ S.alertFilter=S.alertFilter===el.dataset.t?null:el.dataset.t; S.pageAlert=0; renderAlertTypes(); renderAlertTable(); });
 }
@@ -762,7 +764,7 @@ function openDrawer(i){
 
 /* ---------- Épinglés direction (page dédiée) ---------- */
 function pinRows(){
-  let arr=S.enriched.filter(r=>S.pins[r._i]);
+  let arr=baseFiltered().filter(r=>S.pins[r._i]);
   if(S.pinQ){ const q=norm(S.pinQ); arr=arr.filter(r=>norm([r.dossier,r.com,r.client,r.designation,r.metier].join(" ")).includes(q)); }
   if(S.pinSort==="eta") arr=[...arr].sort((a,b)=>(a.delaiETA??9e9)-(b.delaiETA??9e9));
   else if(S.pinSort==="dossier") arr=[...arr].sort((a,b)=>String(a.dossier||"").localeCompare(String(b.dossier||"")));
@@ -1044,6 +1046,7 @@ async function init(){
     const k=cb.dataset.at;
     if(cb.checked){ if(!F.alertTypes.includes(k)) F.alertTypes.push(k); }
     else { F.alertTypes=F.alertTypes.filter(x=>x!==k); }
+    if(S.alertFilter&&!F.alertTypes.includes(S.alertFilter)) S.alertFilter=null;
     S.pageMain=0; S.pageAlert=0; renderAll();
   });
   $("#gAlertPanel").addEventListener("click",e=>{
