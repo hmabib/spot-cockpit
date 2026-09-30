@@ -160,11 +160,23 @@ function autoMap(headers){
   });
   return out;
 }
-function applyMapping(headers, rows, mapping){
+function applyMapping(headers, rows, mapping){ const colIdx={}; headers.forEach((h,i)=>colIdx[h]=i); return rows.map((_,ri)=>mapRow(headers,colIdx,rows,ri,mapping)); }
+/* Version par blocs (gros volumes, ex. 150 000 lignes) : l'interface reste réactive + progression visible */
+async function applyMappingAsync(headers, rows, mapping, onProgress){
   const colIdx={}; headers.forEach((h,i)=>colIdx[h]=i);
-  return rows.map((r,ri)=>{
+  const out=new Array(rows.length); const CH=25000;
+  for(let i=0;i<rows.length;i+=CH){
+    const end=Math.min(i+CH,rows.length);
+    for(let j=i;j<end;j++) out[j]=mapRow(headers,colIdx,rows,j,mapping);
+    if(onProgress) onProgress(end,rows.length);
+    await new Promise(r=>setTimeout(r));
+  }
+  return out;
+}
+function mapRow(headers, colIdx, rows, ri, mapping){
+  const r=rows[ri];
     const g=k=>{ const m=mapping[k]; if(!m||!m.col||!(m.col in colIdx)) return ""; const v=r[colIdx[m.col]]; return v==null?"":String(v).trim(); };
-    const o={_i:ri, com:g("com"), metier:g("metier"), sousMetier:g("sousMetier"), client:g("client"), sousCompte:g("sousCompte"), designation:g("designation"), poids:g("poids"), dossier:g("dossier"),
+    return {_i:ri, com:g("com"), metier:g("metier"), sousMetier:g("sousMetier"), client:g("client"), sousCompte:g("sousCompte"), designation:g("designation"), poids:g("poids"), dossier:g("dossier"),
       com1:g("com1"),com2:g("com2"),com3:g("com3"),com4:g("com4"),com5:g("com5"), auteur:g("auteur"),
       dateETA:excelToDate(rows[ri][colIdx[mapping.dateETA?.col]] ?? g("dateETA")), dateRTA:excelToDate(rows[ri][colIdx[mapping.dateRTA?.col]] ?? g("dateRTA")),
       dateValidation:excelToDate(rows[ri][colIdx[mapping.dateValidation?.col]] ?? ""), dateDocs:excelToDate(rows[ri][colIdx[mapping.dateDocs?.col]] ?? ""),
@@ -174,20 +186,24 @@ function applyMapping(headers, rows, mapping){
       dateFactInt:excelToDate(rows[ri][colIdx[mapping.dateFactInt?.col]] ?? ""), dateValidFinal:excelToDate(rows[ri][colIdx[mapping.dateValidFinal?.col]] ?? ""),
       dateArchivage:excelToDate(rows[ri][colIdx[mapping.dateArchivage?.col]] ?? ""),
       delaiETA_raw:rows[ri][colIdx[mapping.delaiETA?.col] ?? -1], delaiRTA_raw:rows[ri][colIdx[mapping.delaiRTA?.col] ?? -1]};
-    // fallback: si mapping texte a échoué pour dates (objets Date SheetJS), relire brut
-    return o;
-  });
 }
 
 /* ---------- Moteur d'enrichissement ---------- */
-function enrichAll(rows){
-  const P=todayPilot();
-  const counts={}; rows.forEach(r=>{ if(r.dossier) counts[r.dossier]=(counts[r.dossier]||0)+1; });
-  // détection MAJ masse : date docs la plus fréquente
-  const freq={}; rows.forEach(r=>{ if(r.dateDocs){const k=r.dateDocs.getTime(); freq[k]=(freq[k]||0)+1;}});
-  let topFreq=0; Object.values(freq).forEach(v=>{topFreq=Math.max(topFreq,v);});
-  const masseRatio = rows.length? topFreq/rows.length : 0;
-  return rows.map(r=>{
+function dossierCounts(rows){ const counts={}; rows.forEach(r=>{ if(r.dossier) counts[r.dossier]=(counts[r.dossier]||0)+1; }); return counts; }
+function enrichAll(rows){ const P=todayPilot(), counts=dossierCounts(rows); return rows.map(r=>enrichRow(r,P,counts)); }
+/* Version par blocs (gros volumes) : progression visible, interface non figée */
+async function enrichAllAsync(rows, onProgress){
+  const P=todayPilot(), counts=dossierCounts(rows);
+  const out=new Array(rows.length); const CH=20000;
+  for(let i=0;i<rows.length;i+=CH){
+    const end=Math.min(i+CH,rows.length);
+    for(let j=i;j<end;j++) out[j]=enrichRow(rows[j],P,counts);
+    if(onProgress) onProgress(end,rows.length);
+    await new Promise(r=>setTimeout(r));
+  }
+  return out;
+}
+function enrichRow(r, P, counts){
     const delaiETA = r.dateETA? diffJ(r.dateETA,P) : (typeof r.delaiETA_raw==="number"?r.delaiETA_raw:(parseFloat(r.delaiETA_raw)||null));
     const delaiRTA = r.dateRTA? diffJ(r.dateRTA,P) : (typeof r.delaiRTA_raw==="number"?r.delaiRTA_raw:(parseFloat(r.delaiRTA_raw)||null));
     // étape bloquante = dernière étape renseignée
@@ -242,7 +258,6 @@ function enrichAll(rows){
     const etaYM=r.dateETA?`${r.dateETA.getFullYear()}-${String(r.dateETA.getMonth()+1).padStart(2,"0")}`:"";
     const rtaYM=r.dateRTA?`${r.dateRTA.getFullYear()}-${String(r.dateRTA.getMonth()+1).padStart(2,"0")}`:"";
     return {...r, delaiETA, delaiRTA, etape:etape.label, etapeKey, stagn, inv, alerts:al, score:sc, crit, comments, lastIdx, etaYM, etaYear:r.dateETA?String(r.dateETA.getFullYear()):"", etaMonth:r.dateETA?String(r.dateETA.getMonth()+1).padStart(2,"0"):"", rtaYM, rtaYear:r.dateRTA?String(r.dateRTA.getFullYear()):""};
-  });
 }
 
 /* ---------- Filtres ---------- */
@@ -759,12 +774,15 @@ function collectAdmin(){
   $$("#cfgAlertTable input[data-col]").forEach(i=>{ CFG.alerts[i.dataset.col].c=i.value; });
   $$("#cfgSevColors input[data-sevc]").forEach(i=>{ CFG.sevColors[i.dataset.sevc]=i.value; });
 }
-function applyCfgAndRerender(msg){
+async function applyCfgAndRerender(msg){
   saveCfg(); applySevColors();
   F.alertTypes=F.alertTypes.filter(k=>CFG.alerts[k]&&CFG.alerts[k].on!==false&&!CFG.alerts[k].deleted);
   if(S.alertFilter&&(!CFG.alerts[S.alertFilter]||CFG.alerts[S.alertFilter].on===false||CFG.alerts[S.alertFilter].deleted)) S.alertFilter=null;
   $("#pilotDate").value=CFG.pilot;
-  if(S.rows.length){ S.enriched=enrichAll(S.rows); fillSelects(); }
+  if(S.rows.length){
+    S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Recalcul : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
+    fillSelects(); setImportState("loaded",S.fileName);
+  }
   renderAll(); renderMethodo(); renderGuide(); renderAdmin();
   if(S.drawerId!==undefined&&$("#drawer").classList.contains("open")) openDrawer(S.drawerId);
   if(msg) toast(msg);
@@ -1027,7 +1045,9 @@ function showMapping(headers,sampleRows,done){
   $("#mapClose").onclick=$("#mapCancel").onclick=()=>{ $("#mapBack").classList.remove("open"); setImportState(S.enriched.length?"loaded":"empty",S.fileName||"Import annulé — choisissez un fichier"); };
   $("#mapValid").onclick=()=>{
     const mapping={}; $$("#mapTable select").forEach(s=>{mapping[s.dataset.k]={col:s.value,conf:"high",score:100};});
-    $("#mapBack").classList.remove("open"); done(mapping);
+    $("#mapBack").classList.remove("open");
+    const run=done; $("#mapValid").onclick=null; done=null; // libère le tableau source (gros volumes)
+    run(mapping);
   };
 }
 async function ingest(headers, body, fileName){
@@ -1036,29 +1056,39 @@ async function ingest(headers, body, fileName){
     S.headers=headers; S.mapping=mapping; S.fileName=fileName;
     try{ localStorage.setItem("spot_mapping",JSON.stringify(mapping)); localStorage.setItem("spot_file",fileName); }catch{}
     const t0=performance.now();
-    // applique mapping par chunks pour rester fluide
-    const mapped=applyMapping(headers, body, mapping);
-    S.rows=mapped; S.enriched=enrichAll(mapped);
+    // mapping puis analyse par blocs : tout est chargé, sans figer l'interface, sans limite de lignes
+    const mapped=await applyMappingAsync(headers, body, mapping, (d,t)=>setImportState("loading",`Lecture des lignes : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
+    S.rows=mapped;
+    S.enriched=await enrichAllAsync(mapped, (d,t)=>setImportState("loading",`Analyse des alertes : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
     S.pilMonth=F.month;
     fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide(); renderAdmin();
-    try{ await IDB.put("dossiers",{fileName,rows:mapped}); }catch{}
-    toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
     setImportState("loaded",fileName);
+    try{ setImportState("loading","Sauvegarde locale…"); await IDB.put("dossiers",{fileName,rows:mapped}); setImportState("loaded",fileName); }
+    catch{ setImportState("loaded",fileName); toast("⚠️ Volume important : données conservées pour cette session (sauvegarde locale saturée)."); }
+    toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
   });
 }
 function readFile(f){
   if(!f) return;
   setImportState("loading",`Lecture de ${f.name}…`);
   const rd=new FileReader();
+  rd.onprogress=e=>{ if(e.lengthComputable) setImportState("loading",`Lecture de ${f.name}… ${Math.round(e.loaded/e.total*100)}%`); };
   rd.onload=e=>{
-    try{
-      const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
-      if(arr.length<2){ setImportState("error","Le fichier ne contient aucun dossier"); toast("❌ Fichier vide"); return; }
-      const headers=arr[0].map(h=>String(h||"").trim());
-      ingest(headers, arr.slice(1).filter(r=>r.some(c=>String(c).trim()!=="")), f.name);
-    }catch(err){ console.error(err); setImportState("error","Vérifiez le format du fichier, puis réessayez"); toast("❌ Erreur lecture : "+esc(err.message)); }
+    (async()=>{
+      try{
+        await new Promise(r=>setTimeout(r)); // laisse afficher l'état de lecture
+        let wb;
+        try{ wb=XLSX.read(e.target.result,{type:"array",cellDates:true,dense:true}); }
+        catch{ wb=XLSX.read(e.target.result,{type:"array",cellDates:true}); }
+        setImportState("loading",`Décodage des lignes de ${f.name}…`);
+        await new Promise(r=>setTimeout(r));
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+        if(arr.length<2){ setImportState("error","Le fichier ne contient aucun dossier"); toast("❌ Fichier vide"); return; }
+        const headers=arr[0].map(h=>String(h||"").trim());
+        ingest(headers, arr.slice(1).filter(r=>r.some(c=>String(c).trim()!=="")), f.name);
+      }catch(err){ console.error(err); setImportState("error","Vérifiez le format du fichier, puis réessayez"); toast("❌ Erreur lecture : "+esc(err.message)); }
+    })();
   };
   rd.onerror=()=>setImportState("error","Impossible de lire le fichier — réessayez");
   rd.readAsArrayBuffer(f);
@@ -1256,7 +1286,7 @@ async function init(){
     const saved=await IDB.get("dossiers");
     const mp=localStorage.getItem("spot_mapping"); if(mp) S.mapping=JSON.parse(mp);
     const fn=localStorage.getItem("spot_file");
-    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
+    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; setImportState("loading",`Analyse de ${saved.rows.length.toLocaleString("fr-FR")} lignes restaurées…`); S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Analyse : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`)); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
     else { fillSelects(); renderAll(); setImportState("empty"); }
   }catch{ fillSelects(); renderAll(); }
   renderAll(); renderAdmin();

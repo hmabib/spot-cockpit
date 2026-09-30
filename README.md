@@ -81,6 +81,11 @@ vercel --prod
 
 ## 7. Fichiers
 
+### Gros volumes (v13)
+
+- **Aucune limite de lignes** : testé et validé sur un export **150 000 lignes / 44 Mo** — chargement intégral (~80 s : lecture, mapping, analyse), progression visible à chaque étape, interface qui reste réactive (traitement par blocs), pagination fluide.
+- Parsing Excel en mode dense (mémoire réduite), libération des gros tableaux après validation du mapping, sauvegarde locale avec message explicite si le stockage du poste est saturé (les données restent en mémoire pour la session).
+
 ### Filtres client et performance client (v12)
 
 - **Filtre Clients (1 ou +)** dans la barre globale, permanent sur toutes les pages : cases à cocher avec **recherche**, boutons Tous / Inverser ; se combine avec les autres filtres globaux.
