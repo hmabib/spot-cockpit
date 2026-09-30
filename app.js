@@ -125,6 +125,14 @@ function tipHTML(r){
 const MOIS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
 const ymLabel=ym=>{ if(!ym) return ""; const [y,m]=ym.split("-"); return `${MOIS[+m-1]||m} ${y}`; };
 const toast = m => { const t=document.createElement("div"); t.className="toast"; t.innerHTML=m; $("#toasts").appendChild(t); setTimeout(()=>t.remove(),4200); };
+function setImportState(state,message){
+  const hero=$("#heroBox");
+  ["loaded","loading","error"].forEach(c=>hero.classList.toggle(c,c===state));
+  $("#importState").textContent={loaded:"Fichier chargé",loading:"Import en cours",error:"Import à vérifier",empty:"En attente d’un fichier"}[state];
+  $("#importTitle").textContent=state==="loaded"?`${S.enriched.length.toLocaleString("fr-FR")} dossiers disponibles`:state==="loading"?"Préparation des dossiers":state==="error"?"L’import n’a pas abouti":"Importez vos dossiers";
+  $("#loadStatus").textContent=message||S.fileName||"Export « Dossiers par COM »";
+  $("#importAction").textContent=S.enriched.length?"Remplacer le fichier":"Choisir un fichier";
+}
 
 /* IndexedDB minimal */
 const IDB = {
@@ -300,16 +308,21 @@ function baseFiltered(){ return S.enriched.filter(r=>matchGlobal(r)); }
 /* écriture centralisée d'un filtre global + synchro des miroirs + rerendu */
 function setF(key,val){
   F[key]=val||"";
-  const map={com:["#gCom","#fCom","#pCom"],metier:["#gMetier","#fMetier","#pMetier"],crit:["#gCrit","#fCrit","#pCrit"],month:["#gMonth","#fMonth","#pMonth"],year:["#gYear","#fYear","#pYear"],rtaMonth:["#pRtaMonth"],rtaYear:["#pRtaYear"]};
-  (map[key]||[]).forEach(s=>setSelect($(s),F[key]));
-  if(key==="com"&&$("#alertCom")) setSelect($("#alertCom"),F.com);
-  if(key==="month"&&$("#alertMonth")) setSelect($("#alertMonth"),F.month);
-  if(key==="year"&&$("#alertYear")) setSelect($("#alertYear"),F.year);
+  const map={com:["#gCom","#fCom","#pCom","#alertCom"],metier:["#gMetier","#fMetier","#pMetier","#alertMetier"],crit:["#gCrit","#fCrit","#pCrit"],month:["#gMonth","#fMonth","#pMonth","#alertMonth","#pilMonth"],year:["#gYear","#fYear","#pYear","#alertYear"],rtaMonth:["#pRtaMonth"],rtaYear:["#pRtaYear"]};
+  if(key==="month") S.pilMonth=F.month;
+  (map[key]||[]).forEach(s=>{
+    const el=$(s);
+    if(key==="month"&&F.month&&el&&![...el.options].some(o=>o.value===F.month)){
+      const option=document.createElement("option"); option.value=F.month; option.textContent=ymLabel(F.month); el.appendChild(option);
+    }
+    setSelect(el,F[key]);
+  });
   S.pageMain=0; S.pageAlert=0;
   renderAll();
 }
 function clearAllFilters(){
   F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[];
+  S.pilMonth=""; setSelect($("#pilMonth"),"");
   ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear","pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear","pFrom","pTo"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
   $$("#sevChips .chip").forEach((x,i)=>x.classList.toggle("active",i===0));
@@ -866,14 +879,14 @@ function showMapping(headers,sampleRows,done){
   const tb=$("#mapTable tbody");
   tb.innerHTML=FIELDS.map(f=>{const m=auto[f.k];return `<tr><td><b>${f.label}</b><br><small style="color:#64748b">${f.k}</small></td><td><select data-k="${f.k}" style="width:100%;border:1px solid #dfe6f0;border-radius:8px;padding:7px"><option value="">— ignorer —</option>${headers.map(h=>`<option ${h===m.col?"selected":""}>${esc(h)}</option>`).join("")}</select></td><td><span class="conf ${m.conf}">${m.conf==="high"?"✓ haute":m.conf==="mid"?"~ moyenne":"? faible"}</span></td></tr>`;}).join("");
   $("#mapBack").classList.add("open");
-  $("#mapClose").onclick=$("#mapCancel").onclick=()=>{ $("#mapBack").classList.remove("open"); };
+  $("#mapClose").onclick=$("#mapCancel").onclick=()=>{ $("#mapBack").classList.remove("open"); setImportState(S.enriched.length?"loaded":"empty",S.fileName||"Import annulé — choisissez un fichier"); };
   $("#mapValid").onclick=()=>{
     const mapping={}; $$("#mapTable select").forEach(s=>{mapping[s.dataset.k]={col:s.value,conf:"high",score:100};});
     $("#mapBack").classList.remove("open"); done(mapping);
   };
 }
 async function ingest(headers, body, fileName){
-  $("#loadStatus").textContent=`Analyse de ${body.length.toLocaleString("fr-FR")} lignes…`;
+  setImportState("loading",`Vérifiez les colonnes · ${body.length.toLocaleString("fr-FR")} lignes`);
   showMapping(headers, body.slice(0,5), async mapping=>{
     S.headers=headers; S.mapping=mapping; S.fileName=fileName;
     try{ localStorage.setItem("spot_mapping",JSON.stringify(mapping)); localStorage.setItem("spot_file",fileName); }catch{}
@@ -881,29 +894,28 @@ async function ingest(headers, body, fileName){
     // applique mapping par chunks pour rester fluide
     const mapped=applyMapping(headers, body, mapping);
     S.rows=mapped; S.enriched=enrichAll(mapped);
-    /* dashboard : mois du jour J par défaut s'il existe dans les données */
-    const pym=pilotYM();
-    S.pilMonth=S.enriched.some(r=>r.etaYM===pym)?pym:"";
+    S.pilMonth=F.month;
     fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide();
     try{ await IDB.put("dossiers",{fileName,rows:mapped}); }catch{}
     toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
-    $("#loadStatus").textContent=`${S.enriched.length.toLocaleString("fr-FR")} dossiers • ${fileName}`;
+    setImportState("loaded",fileName);
   });
 }
 function readFile(f){
   if(!f) return;
-  $("#loadStatus").textContent="Lecture "+f.name+" ("+(f.size/1048576).toFixed(1)+" Mo)…";
+  setImportState("loading",`Lecture de ${f.name}…`);
   const rd=new FileReader();
   rd.onload=e=>{
     try{
       const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
-      if(arr.length<2){ toast("❌ Fichier vide"); return; }
+      if(arr.length<2){ setImportState("error","Le fichier ne contient aucun dossier"); toast("❌ Fichier vide"); return; }
       const headers=arr[0].map(h=>String(h||"").trim());
       ingest(headers, arr.slice(1).filter(r=>r.some(c=>String(c).trim()!=="")), f.name);
-    }catch(err){ console.error(err); toast("❌ Erreur lecture : "+err.message); }
+    }catch(err){ console.error(err); setImportState("error","Vérifiez le format du fichier, puis réessayez"); toast("❌ Erreur lecture : "+esc(err.message)); }
   };
+  rd.onerror=()=>setImportState("error","Impossible de lire le fichier — réessayez");
   rd.readAsArrayBuffer(f);
 }
 function csvLine(r){
@@ -984,10 +996,10 @@ async function init(){
   $("#cfgReport").onclick=()=>{ $("#cfgPilot").value="2026-09-28"; };
   $("#guidePrint").onclick=()=>window.print();
   // dashboard pilotage du mois
-  $("#pilMonth").onchange=e=>{ S.pilMonth=e.target.value; renderPilotage(); };
-  $("#pilPrev").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),-1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
-  $("#pilNext").onclick=()=>{ S.pilMonth=ymShift(S.pilMonth||pilotYM(),1); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); };
-  $("#pilJ").onclick=()=>{ S.pilMonth=pilotYM(); setSelect($("#pilMonth"),S.pilMonth); renderPilotage(); toast("📅 Mois du jour J : <b>"+ymLabel(S.pilMonth)+"</b>"); };
+  $("#pilMonth").onchange=e=>setF("month",e.target.value);
+  $("#pilPrev").onclick=()=>setF("month",ymShift(S.pilMonth||pilotYM(),-1));
+  $("#pilNext").onclick=()=>setF("month",ymShift(S.pilMonth||pilotYM(),1));
+  $("#pilJ").onclick=()=>{ setF("month",pilotYM()); toast("📅 Mois du jour J : <b>"+ymLabel(S.pilMonth)+"</b>"); };
   // filtres du dashboard (miroirs globaux + dates)
   ["pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={pCom:"com",pMetier:"metier",pCrit:"crit",pMonth:"month",pYear:"year",pRtaMonth:"rtaMonth",pRtaYear:"rtaYear"}[id]; setF(k,el.value); });});
   ["pFrom","pTo"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ F.dFrom=$("#pFrom").value; F.dTo=$("#pTo").value; S.pageMain=0; S.pageAlert=0; renderAll(); });});
@@ -1031,9 +1043,7 @@ async function init(){
   $("#mailCsv").onclick=()=>{ download(`spot_situation_${MAIL_COM}.csv`,toCSVParts(S.enriched.filter(r=>r.com===MAIL_COM)),"text/csv"); };
   $("#mailOpen").onclick=()=>{ const to=$("#mailTo").value.trim(), su=$("#mailSubject").value, bo=$("#mailBody").value; window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(bo)}`; toast("📧 Messagerie ouverte — joignez le CSV du COM"); };
   ["fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fEta1","fEta2","fStep","fMonth","fYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{
-    if(id==="fCom") F.com=el.value; else if(id==="fMetier") F.metier=el.value; else if(id==="fCrit") F.crit=el.value;
-    else if(id==="fMonth") F.month=el.value; else if(id==="fYear") F.year=el.value;
-    if(["fCom","fMetier","fCrit","fMonth","fYear"].includes(id)){ setSelect($("#gCom"),F.com); setSelect($("#gMetier"),F.metier); setSelect($("#gCrit"),F.crit); setSelect($("#gMonth"),F.month); setSelect($("#gYear"),F.year); }
+    if(["fCom","fMetier","fCrit","fMonth","fYear"].includes(id)){ setF({fCom:"com",fMetier:"metier",fCrit:"crit",fMonth:"month",fYear:"year"}[id],el.value); return; }
     S.pageMain=0; renderAll();
   });});
   ["gCom","gMetier","gCrit","gMonth","gYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={gCom:"com",gMetier:"metier",gCrit:"crit",gMonth:"month",gYear:"year"}[id]; setF(k,el.value); });});
@@ -1055,7 +1065,7 @@ async function init(){
   });
   $("#fSearch").addEventListener("input",()=>{S.pageMain=0;renderMain();});
   $("#alertSearch").addEventListener("input",()=>{S.pageAlert=0;renderAlertTable();});
-  ["alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{S.pageAlert=0;renderAlertTable();});});
+  ["alertCom","alertMetier","alertMonth","alertYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>setF({alertCom:"com",alertMetier:"metier",alertMonth:"month",alertYear:"year"}[id],el.value));});
   $("#alertSort").addEventListener("change",e=>{S.sortAlert.k={crit:"crit",eta:"eta",rta:"rta",stagn:"stagn"}[e.target.value]||"crit";S.pageAlert=0;renderAlertTable();});
   $$("#sevChips .chip").forEach(c=>c.onclick=()=>{$$("#sevChips .chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");S.sevFilter=c.dataset.sev;S.pageAlert=0;renderAlertTable();});
   $("#mainPrev").onclick=()=>{S.pageMain=Math.max(0,S.pageMain-1);renderMain();};
@@ -1081,10 +1091,10 @@ async function init(){
   $("#comDetailCsv").onclick=()=>{ if(!S.selCom) return; const r=S.enriched.filter(x=>x.com===S.selCom); download(`spot_situation_${S.selCom}.csv`,toCSVParts(r),"text/csv"); toast(fullToast(r.length)); };
   $("#comDetailXlsx").onclick=()=>{ if(S.selCom) exportXLSX(`spot_situation_${S.selCom}.xlsx`,S.enriched.filter(x=>x.com===S.selCom)); };
   $("#comDetailMail").onclick=()=>{ if(S.selCom) openMailModal(S.selCom); };
-  $("#btnReset").onclick=async()=>{ if(!confirm("Effacer les données locales ?"))return; S.rows=[];S.enriched=[];S.fileName="";await IDB.del("dossiers");localStorage.removeItem("spot_mapping");localStorage.removeItem("spot_file");fillSelects();renderAll();toast("🗑 Données locales effacées"); };
+  $("#btnReset").onclick=async()=>{ if(!confirm("Effacer les données locales ?"))return; S.rows=[];S.enriched=[];S.fileName="";await IDB.del("dossiers");localStorage.removeItem("spot_mapping");localStorage.removeItem("spot_file");clearAllFilters();fillSelects();renderAll();setImportState("empty");toast("🗑 Données locales effacées"); };
   $("#btnImport").onclick=()=>$("#fileInput").click();
-  $("#fileInput").onchange=e=>readFile(e.target.files[0]);
-  $("#fileInput2").onchange=e=>readFile(e.target.files[0]);
+  $("#fileInput").onchange=e=>{ readFile(e.target.files[0]); e.target.value=""; };
+  $("#fileInput2").onchange=e=>{ readFile(e.target.files[0]); e.target.value=""; };
   const dz=$("#dropZone"); ["dragover","dragenter"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("over");})); ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("over");})); dz.addEventListener("drop",e=>readFile(e.dataTransfer.files[0]));
   await IDB.open();
   // restauration locale — aucune donnée factice : sans fichier, état vide + appel au chargement
@@ -1092,8 +1102,8 @@ async function init(){
     const saved=await IDB.get("dossiers");
     const mp=localStorage.getItem("spot_mapping"); if(mp) S.mapping=JSON.parse(mp);
     const fn=localStorage.getItem("spot_file");
-    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); $("#loadStatus").textContent=S.enriched.length.toLocaleString("fr-FR")+" dossiers restaurés (local) • "+S.fileName; toast("💾 Données locales restaurées : "+S.enriched.length.toLocaleString("fr-FR")+" dossiers."); }
-    else { fillSelects(); renderAll(); $("#loadStatus").textContent="En attente de votre export Excel — glissez le fichier ici."; }
+    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
+    else { fillSelects(); renderAll(); setImportState("empty"); }
   }catch{ fillSelects(); renderAll(); }
   renderAll();
 }
