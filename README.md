@@ -81,6 +81,14 @@ vercel --prod
 
 ## 7. Fichiers
 
+### Performance COM et règles partagées (v11)
+
+- Tuiles COM, sélecteur de portefeuille et fiche de pilotage : états **à traiter / douane / livraison / clôture / archivés**, cliquables vers les dossiers filtrés. Classement et analyse SLA repliables.
+- **Administration → Nouvelle alerte** : nom, sévérité, poids, couleur et conditions **ET / OU** (champ vide/renseigné, égalité, contient, comparaison numérique, ancienneté d'une date).
+- **Modifier / Masquer / Afficher / Supprimer** : les règles masquées ou supprimées sont exclues des vues métier et du moteur de score. Les règles masquées restent accessibles dans Administration pour les réactiver.
+- **Exporter JSON** sauvegarde les réglages et télécharge `spot-reglages.json`. **Importer JSON** valide puis applique une configuration reçue. Le fichier contient les réglages et règles, pas les dossiers.
+- Validation du moteur et du format JSON : `node tests/settings.test.cjs`.
+
 ```
 spot-cockpit/
   index.html  — structure + vues (overview, alertes, dossiers, perfs, BU, admin, guide, méthodo)

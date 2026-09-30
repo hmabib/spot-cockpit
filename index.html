@@ -33,6 +33,7 @@
   <div class="topbar">
     <div>
       <h2 id="viewTitle">Vue d'ensemble</h2>
+      <select id="mobileNav" class="mobile-nav" aria-label="Naviguer vers une vue"><option value="pilotage">Pilotage du mois</option><option value="overview">Vue d’ensemble</option><option value="alertes">Alertes</option><option value="dossiers">Dossiers</option><option value="epingles">Épinglés</option><option value="perfs">Performance COM</option><option value="bu">Vision BU</option><option value="admin">Administration</option><option value="guide">Guide</option><option value="methodo">Méthodologie</option></select>
       <div class="sub" id="viewSub">Pilotage du jour — anomalies, écarts critiques, COM en difficulté</div>
     </div>
     <div class="top-actions">
@@ -182,15 +183,20 @@
 
     <!-- PERFS -->
     <section class="view" id="view-perfs">
+      <div class="section-heading"><div><span class="eyebrow">PILOTAGE COMMERCIAL</span><h3>Votre portefeuille, en un regard</h3><p>Sélectionnez un COM pour suivre ses états et les dossiers à traiter.</p></div><div class="f-field"><label for="comPicker">Fiche de pilotage COM</label><select id="comPicker"><option value="">Choisir un COM</option></select></div></div>
       <div class="kpi-grid" id="perfKpis" style="grid-template-columns:repeat(4,1fr)"></div>
+      <div class="com-tiles" id="comTiles"></div>
+      <details class="detail-section"><summary>Comparer les COM · classement détaillé</summary>
       <div class="card"><div class="card-h"><h3>🏆 Classement des COM — performance vs difficulté</h3><span class="hint">Score = criticité moyenne pondérée + retards + stagnation. Cliquez un COM pour voir ses dossiers. ✉️ pour envoyer sa situation par e-mail.</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" id="perfExport">⬇ CSV</button><button class="btn small" id="perfExportX">⬇ XLSX</button></span></div>
       <div class="table-wrap"><table id="perfTable"><thead><tr><th>COM</th><th>Dossiers</th><th>% Critique+Haute</th><th>Score difficulté</th><th>Retard ETA médian</th><th>Taux BAE</th><th>Taux archivage</th><th>Verdict</th><th>Situation</th></tr></thead><tbody></tbody></table></div></div>
+      </details>
       <div class="card"><div class="card-h"><h3>🔍 Détail COM — <span id="comDetailName">—</span></h3><span class="hint">Cliquez une ligne du classement pour changer de COM</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" id="comDetailSee">👁 Dossiers</button><button class="btn small" id="comDetailCsv">⬇ CSV</button><button class="btn small" id="comDetailXlsx">⬇ XLSX</button><button class="btn small primary" id="comDetailMail">✉️ E-mail</button></span></div>
+      <div class="com-status-board" id="comStatusBoard"></div>
       <div class="card-b"><div class="kpi-grid" id="comDetailKpis" style="grid-template-columns:repeat(6,1fr)"></div>
       <div class="panels"><div class="card"><div class="card-h"><h3>Répartition criticité</h3></div><div class="card-b"><div class="bars" id="comDetailSev"></div></div></div>
       <div class="card"><div class="card-h"><h3>Alertes dominantes</h3></div><div class="card-b"><div class="bars" id="comDetailAlerts"></div></div></div></div>
       <div class="card"><div class="card-h"><h3>Volume par mois (ETA) — tous</h3></div><div class="card-b"><div class="bars" id="comDetailMonths"></div></div></div>
-      <div class="card" style="margin-top:12px"><div class="card-h"><h3>⏱ Délais moyens entre étapes (jours) — positionnement du COM dans le process</h3><span class="hint">Moyenne constatée sur les dossiers du COM ayant les 2 dates</span></div><div class="card-b"><div class="bars" id="comDetailStages"></div></div></div>
+      <details class="detail-section"><summary>Délais entre étapes · analyse SLA</summary><div class="card-b"><div class="bars" id="comDetailStages"></div></div></details>
       <div class="card" style="margin-top:12px"><div class="card-h"><h3>Top dossiers du COM</h3></div><div class="table-wrap" style="max-height:340px"><table id="comDetailTable"><thead><tr><th>Score</th><th>N° dossier</th><th>Client</th><th>ETA / Délai</th><th>Étape</th><th>Alertes</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div></div>
       </div></div>
     </section>
@@ -204,7 +210,9 @@
 
     <!-- ADMIN -->
     <section class="view" id="view-admin">
-      <div class="card"><div class="card-h"><h3>⚙️ Administration — réglages des alertes, seuils, SLA, couleurs, jour de pilotage</h3><span class="hint">Tout est local (localStorage). Recalcul instantané.</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small ghost" id="cfgReset">↩ Défaut</button><button class="btn small primary" id="cfgSave">💾 Enregistrer</button></span></div>
+      <div class="section-heading"><div><span class="eyebrow">CONFIGURATION</span><h3>Règles et réglages partagés</h3><p>Les changements sont sauvegardés sur ce poste. Exportez le JSON pour partager la même configuration.</p></div><div class="settings-actions"><button class="btn" id="settingsExport">↓ Exporter JSON</button><button class="btn" id="settingsImport">↑ Importer JSON</button><input type="file" id="settingsFile" accept=".json,application/json" class="sr"><button class="btn primary" id="ruleNew">+ Nouvelle alerte</button></div></div>
+      <div id="ruleManager" class="rule-grid"></div>
+      <div class="card"><div class="card-h"><h3>Seuils, SLA et couleurs</h3><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small ghost" id="cfgReset">↩ Défaut</button><button class="btn small primary" id="cfgSave">💾 Enregistrer</button></span></div>
       <div class="card-b">
         <h4 style="margin:0 0 8px">📅 Jour de pilotage</h4>
         <div class="filters" style="grid-template-columns:repeat(4,1fr);margin-top:0">
@@ -215,8 +223,9 @@
         </div>
         <h4>⏱ SLA par transition (jours)</h4>
         <div class="filters" id="cfgSlaGrid" style="grid-template-columns:repeat(5,1fr);margin-top:0"></div>
-        <h4>🚨 Alertes : activation, sévérité, poids, couleur, seuils jours</h4>
+        <details class="detail-section"><summary>Réglages détaillés de toutes les alertes</summary>
         <div class="table-wrap"><table id="cfgAlertTable" style="min-width:760px"><thead><tr><th>Code</th><th>Alerte</th><th>Active</th><th>Sévérité</th><th>Poids</th><th>Seuil (j)</th><th>Couleur</th></tr></thead><tbody></tbody></table></div>
+        </details>
         <h4>🎨 Couleurs des sévérités</h4>
         <div class="filters" id="cfgSevColors" style="grid-template-columns:repeat(4,1fr);margin-top:0"></div>
         <div class="footer-note" id="cfgStatus">Modifiez puis 💾 Enregistrer. Les couleurs s'appliquent aux pastilles, cartes d'alertes et indicateurs.</div>
@@ -276,7 +285,23 @@
 
 <div class="toast-wrap" id="toasts"></div>
 <div id="tip" role="tooltip"></div>
+<div class="modal-back" id="ruleBack"><div class="modal"><div class="modal-h"><h3 id="ruleEditorTitle">Nouvelle alerte</h3><button class="btn small" id="ruleClose" style="margin-left:auto" aria-label="Fermer l’éditeur">✕</button></div><div class="modal-b">
+  <div class="filters" style="grid-template-columns:repeat(3,1fr)">
+    <div class="f-field"><label for="ruleLabel">Nom de l’alerte</label><input id="ruleLabel" maxlength="200" placeholder="Ex. Livraison à relancer"></div>
+    <div class="f-field"><label for="ruleSeverity">Sévérité</label><select id="ruleSeverity"><option>Critique</option><option>Haute</option><option>Moyenne</option></select></div>
+    <div class="f-field"><label for="ruleWeight">Poids dans le score</label><input type="number" id="ruleWeight" min="0" max="100" value="15"></div>
+    <div class="f-field"><label for="ruleColor">Couleur</label><input type="color" id="ruleColor" value="#e9730c"></div>
+    <div class="f-field"><label for="ruleMode">Déclenchement</label><select id="ruleMode"><option value="all">Toutes les conditions (ET)</option><option value="any">Au moins une condition (OU)</option></select></div>
+    <div class="f-field"><label for="ruleDescription">Message affiché</label><input id="ruleDescription" placeholder="Action à effectuer…"></div>
+  </div>
+  <p id="ruleBuiltIn" class="footer-note" hidden>Règle standard : ses conditions actuelles sont conservées. Ajoutez des conditions pour les remplacer par votre propre règle.</p>
+  <div id="ruleConditions"></div>
+  <button class="btn small" id="conditionAdd">+ Ajouter une condition</button>
+  <p id="ruleError" class="late" role="alert"></p>
+  <div class="settings-actions" style="justify-content:flex-end"><button class="btn ghost" id="ruleCancel">Annuler</button><button class="btn primary" id="ruleSave">Enregistrer la règle</button></div>
+</div></div></div>
 
+<script src="settings.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -38,7 +38,7 @@ const DEFAULT_CFG = {
   sla:{...SLA_DEFAULT}, alerts:JSON.parse(JSON.stringify(ALERT_BASE)), sevColors:{...SEV_DEFAULT}
 };
 let CFG = JSON.parse(JSON.stringify(DEFAULT_CFG));
-function loadCfg(){ try{ const raw=localStorage.getItem("spot_cfg"); if(raw){ const c=JSON.parse(raw); CFG={...JSON.parse(JSON.stringify(DEFAULT_CFG)),...c, sla:{...SLA_DEFAULT,...(c.sla||{})}, sevColors:{...SEV_DEFAULT,...(c.sevColors||{})}}; Object.keys(ALERT_BASE).forEach(k=>{ CFG.alerts[k]={...ALERT_BASE[k],...(c.alerts?.[k]||{})}; }); } }catch{} }
+function loadCfg(){ try{ const raw=localStorage.getItem("spot_cfg"); if(raw) CFG=SpotSettings.validate(JSON.parse(raw),DEFAULT_CFG); }catch(err){ console.warn("Réglages non restaurés",err); } }
 function saveCfg(){ try{ localStorage.setItem("spot_cfg",JSON.stringify(CFG)); }catch{} }
 function alertDef(k){ return CFG.alerts[k]||ALERT_BASE[k]; }
 function sevColor(sev){ return CFG.sevColors[sev]||SEV_DEFAULT[sev]||"#64748b"; }
@@ -103,7 +103,7 @@ const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFi
 const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[] };
 /* visibilité multi-critères des types d'alerte : vide = tous visibles */
 function matchTypes(r){ return !F.alertTypes.length || r.alerts.some(a=>F.alertTypes.includes(a.c)); }
-function visibleAlerts(r){ return F.alertTypes.length?r.alerts.filter(a=>F.alertTypes.includes(a.c)):r.alerts; }
+function visibleAlerts(r){ return r.alerts.filter(a=>CFG.alerts[a.c]&&CFG.alerts[a.c].on!==false&&!CFG.alerts[a.c].deleted&&(!F.alertTypes.length||F.alertTypes.includes(a.c))); }
 /* Épinglés direction + notes du directeur — persistés en local */
 function loadLocal(){ try{ S.pins=JSON.parse(localStorage.getItem("spot_pins")||"{}")||{}; }catch{ S.pins={}; } try{ S.notes=JSON.parse(localStorage.getItem("spot_notes")||"{}")||{}; }catch{ S.notes={}; } }
 function savePins(){ try{ localStorage.setItem("spot_pins",JSON.stringify(S.pins)); }catch{} }
@@ -214,7 +214,7 @@ function enrichAll(rows){
     });
     // alertes (paramétrables depuis Administration)
     const al=[];
-    const on=k=>CFG.alerts[k]?.on!==false;
+    const on=k=>!!CFG.alerts[k]&&CFG.alerts[k].on!==false&&!CFG.alerts[k].deleted&&!CFG.alerts[k].conditions;
     if(on("A1")&&r.dateETA&&delaiETA!=null&&delaiETA<0&&!r.dateBAE) al.push({c:"A1",d:`ETA ${fmtD(r.dateETA)} dépassée de ${-delaiETA}j sans BAE`});
     if(on("A2")&&r.dateRTA&&delaiRTA!=null&&delaiRTA<0&&!r.dateArchivage) al.push({c:"A2",d:`RTA ${fmtD(r.dateRTA)} dépassée de ${-delaiRTA}j, non archivé`});
     if(on("A3")) inv.forEach(x=>al.push({c:"A3",d:"Inversion : "+x}));
@@ -227,6 +227,10 @@ function enrichAll(rows){
       if(!r.com||!r.client||!r.dossier) al.push({c:"A10",d:"Champ clé vide : "+[!r.com&&"COM",!r.client&&"Client",!r.dossier&&"N° dossier"].filter(Boolean).join(", ")});
       if(r.dossier&&counts[r.dossier]>1) al.push({c:"A10",d:`N° dossier en double (${counts[r.dossier]}×)`});
     }
+    const ruleRow={...r,delaiETA,delaiRTA,etapeKey,stagnCount:stagn.length,comments:[r.com1,r.com2,r.com3,r.com4,r.com5].filter(Boolean).join(" • ")};
+    Object.entries(CFG.alerts).forEach(([code,rule])=>{
+      if(rule.on!==false&&!rule.deleted&&rule.conditions&&SpotSettings.matches(rule,ruleRow,P)) al.push({c:code,d:rule.h||rule.t});
+    });
     // score criticité (poids paramétrables)
     let sc=0;
     al.forEach(a=>{ sc+= (CFG.alerts[a.c]?.w ?? 8); });
@@ -304,7 +308,7 @@ function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
   if(F.dTo){ const d2=new Date(F.dTo+"T00:00:00"); if(!r.dateETA||r.dateETA>d2) return false; }
   return true;
 }
-function baseFiltered(){ return S.enriched.filter(r=>matchGlobal(r)); }
+function baseFiltered(){ return S.enriched.filter(r=>matchGlobal(r)).map(r=>({...r,alerts:visibleAlerts(r)})); }
 /* écriture centralisée d'un filtre global + synchro des miroirs + rerendu */
 function setF(key,val){
   F[key]=val||"";
@@ -331,12 +335,15 @@ function clearAllFilters(){
 function filteredMain(){
   const q=norm($("#fSearch").value||""), sm=$("#fSous").value, cl=$("#fClient").value, sc=$("#fSousCpte").value, dl=$("#fDelay").value, st=$("#fStep").value;
   const e1=$("#fEta1").value?new Date($("#fEta1").value+"T00:00:00"):null, e2=$("#fEta2").value?new Date($("#fEta2").value+"T00:00:00"):null;
-  return S.enriched.filter(r=>{
+  return baseFiltered().filter(r=>{
     if(!matchGlobal(r)) return false;
     if(!matchTypes(r)) return false;
     if(sm&&r.sousMetier!==sm) return false;
     if(cl&&r.client!==cl) return false; if(sc&&r.sousCompte!==sc) return false;
-    if(st&&r.etapeKey!==st&&!(st==="archive"&&r.dateArchivage)) return false;
+    const stageGroups={douane:["douane","factDouane","bae"],livraison:["mise","retour"],cloture:["factInt","validFinal","archivage"]};
+    if(st==="priority"&&!["Critique","Haute"].includes(r.crit)) return false;
+    if(stageGroups[st]&&!stageGroups[st].includes(r.etapeKey)) return false;
+    if(st&&st!=="priority"&&!stageGroups[st]&&r.etapeKey!==st&&!(st==="archive"&&r.dateArchivage)) return false;
     if(e1&&(!r.dateETA||r.dateETA<e1)) return false; if(e2&&(!r.dateETA||r.dateETA>e2)) return false;
     if(dl==="etaLate"&&!(r.delaiETA<0)) return false; if(dl==="etaCrit"&&!(r.delaiETA<CFG.etaCrit)) return false;
     if(dl==="rtaLate"&&!(r.delaiRTA<0)) return false; if(dl==="rtaCrit"&&!(r.delaiRTA<CFG.rtaCrit)) return false;
@@ -350,7 +357,7 @@ function filteredAlerts(){
   const q=norm($("#alertSearch").value||""), cLoc=$("#alertCom").value, mLoc=$("#alertMetier").value, moLoc=$("#alertMonth").value, yLoc=$("#alertYear").value;
   const sev=S.sevFilter, type=S.alertFilter;
   let list=[];
-  S.enriched.forEach(r=>r.alerts.forEach(a=>list.push({r,a})));
+  S.enriched.forEach(r=>visibleAlerts(r).forEach(a=>list.push({r,a})));
   return list.filter(({r,a})=>{
     if(type&&a.c!==type) return false;
     if(F.alertTypes.length&&!F.alertTypes.includes(a.c)) return false;
@@ -562,7 +569,7 @@ function renderTopAlerts(){
 function renderAlertTypes(){
   const counts={}; Object.keys(CFG.alerts).forEach(k=>counts[k]=0);
   baseFiltered().forEach(r=>visibleAlerts(r).forEach(a=>counts[a.c]++));
-  $("#alertTypes").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<div class="alert-type ${S.alertFilter===k?"active":""}${d.on===false?" off":""}" data-t="${k}" style="--c:${d.c};${d.on===false?"opacity:.45;filter:grayscale(.6)":""}" title="${esc(d.h)} — poids ${d.w}, seuil ${d.days}j${d.on===false?" (désactivée — voir Administration)":""}"><small>${d.ico||"•"} ${k} • ${d.sev}${d.on===false?" • OFF":""}</small><b>${counts[k].toLocaleString("fr-FR")}</b><span><b style="font-size:12px">${esc(d.t)}</b><br>${esc(d.h)}</span></div>`).join("");
+  $("#alertTypes").innerHTML=Object.entries(CFG.alerts).filter(([k,d])=>d.on!==false&&!d.deleted&&(!F.alertTypes.length||F.alertTypes.includes(k))).map(([k,d])=>`<button class="alert-type ${S.alertFilter===k?"active":""}" data-t="${k}" style="--c:${d.c}" title="${esc(d.h)}"><small>${esc(d.ico||"•")} ${k} · ${d.sev}</small><b>${counts[k].toLocaleString("fr-FR")}</b><span>${esc(d.t)}</span></button>`).join("")||'<div class="empty-state"><b>Aucune alerte visible</b>Activez une règle dans Administration.</div>';
   $$("#alertTypes .alert-type").forEach(el=>el.onclick=()=>{ S.alertFilter=S.alertFilter===el.dataset.t?null:el.dataset.t; S.pageAlert=0; renderAlertTypes(); renderAlertTable(); });
 }
 function sortRows(rows){
@@ -601,7 +608,7 @@ function renderPerfs(){
   if(!S.selCom||!arr.some(a=>a.k===S.selCom)) S.selCom=arr[0]?.k||"";
   $("#perfKpis").innerHTML=[{l:"COM suivis",v:arr.length,s:"commerciaux actifs"},{l:"COM en difficulté",v:dif,s:`score ≥ ${CFG.thHaute}`},{l:"Plus critique",v:arr[0]?.k||"—",s:arr[0]?`score ${arr[0].avg.toFixed(0)}`:""},{l:"Plus fluide",v:arr.length?arr[arr.length-1].k:"—",s:arr.length?`score ${arr[arr.length-1].avg.toFixed(0)}`:""}].map(k=>`<div class="kpi"><label>${k.l}</label><strong style="font-size:18px">${esc(String(k.v))}</strong><span>${esc(k.s)}</span></div>`).join("");
   $("#perfTable tbody").innerHTML=arr.map(a=>`<tr data-com="${esc(a.k)}" class="${a.k===S.selCom?"sel":""}"><td><b style="cursor:pointer;color:#0f2a52" data-act="see">${esc(a.k)}</b></td><td>${a.n}</td><td>${Math.round(a.rate*100)}%</td><td><div class="progress"><i style="width:${Math.min(100,a.avg)}%;background:${a.avg>=CFG.thCrit?sevColor("Critique"):a.avg>=CFG.thHaute?sevColor("Haute"):"#12805c"}"></i></div><small>${a.avg.toFixed(1)}</small></td><td class="${a.med<0?"late":"early"}">${a.med==null?"—":a.med+"j"}</td><td>${Math.round(a.tBae*100)}%</td><td>${Math.round(a.tArch*100)}%</td><td>${verdictPill(a.avg)}</td><td style="white-space:nowrap"><button class="btn small" data-act="see" title="Voir les dossiers">👁</button> <button class="btn small" data-act="csv" title="Exporter CSV du COM">⬇</button> <button class="btn small" data-act="mail" title="Envoyer la situation par e-mail">✉️</button></td></tr>`).join("")||'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel pour voir le classement des COM.</div></td></tr>';
-  $$("#perfTable tbody tr").forEach(tr=>{
+  $$("#perfTable tbody tr[data-com]").forEach(tr=>{
     const com=tr.dataset.com;
     tr.querySelector('[data-act="see"]').onclick=e=>{ e.stopPropagation(); setF("com",com); goto("dossiers"); };
     tr.querySelector('[data-act="csv"]').onclick=e=>{ e.stopPropagation(); download(`spot_situation_${com}.csv`,toCSVParts(S.enriched.filter(r=>r.com===com)),"text/csv"); toast(`⬇ Situation <b>${esc(com)}</b> exportée en intégralité (CSV)`); };
@@ -609,14 +616,16 @@ function renderPerfs(){
     tr.onclick=e=>{ if(e.target.closest("button")) return; S.selCom=com; renderPerfs(); };
   });
   renderComDetail();
+  renderComTiles(arr);
 }
 /* Détail d'un COM : KPIs, criticité, alertes, mois, top dossiers */
 function renderComDetail(){
   const com=S.selCom;
   $("#comDetailName").textContent=com||"—";
   const body=$("#comDetailKpis"), sev=$("#comDetailSev"), al=$("#comDetailAlerts"), mo=$("#comDetailMonths"), st=$("#comDetailStages"), tb=$("#comDetailTable tbody");
-  if(!com){ body.innerHTML=""; sev.innerHTML="<p style='color:#64748b'>—</p>"; al.innerHTML=""; mo.innerHTML=""; st.innerHTML=""; tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><b>Sélectionnez un COM</b>Cliquez une ligne du classement.</div></td></tr>'; return; }
+  if(!com){ $("#comStatusBoard").innerHTML=""; body.innerHTML=""; sev.innerHTML="<p style='color:#64748b'>—</p>"; al.innerHTML=""; mo.innerHTML=""; st.innerHTML=""; tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><b>Sélectionnez un COM</b>Cliquez une ligne du classement.</div></td></tr>'; return; }
   const rows=baseFiltered().filter(r=>r.com===com);
+  renderComStatus(rows);
   const n=rows.length||1;
   const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length, moy=rows.filter(r=>r.crit==="Moyenne").length, ok=rows.filter(r=>r.crit==="OK").length;
   const etaMed=(()=>{const v=rows.map(r=>r.delaiETA).filter(v=>v!=null).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length/2)]:null;})();
@@ -662,7 +671,7 @@ function renderAlertMulti(){
   const sel=F.alertTypes;
   btn.innerHTML=sel.length?`🚨 ${esc(sel.slice(0,3).join(", "))}${sel.length>3?` (+${sel.length-3})`:""} ▾`:"🚨 Toutes ▾";
   btn.title=sel.length?`Types visibles : ${sel.join(", ")} — cliquez pour modifier`:"Choisir les types d'alerte visibles sur toutes les pages";
-  panel.innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<label class="msel-opt" title="${esc(d.h)}"><input type="checkbox" data-at="${k}" ${sel.includes(k)?"checked":""} ${d.on===false?"disabled":""}><span class="dot" style="background:${d.c}"></span><b>${k}</b><span style="flex:1">${esc(d.t)}</span>${d.on===false?'<small style="color:#94a3b8">OFF</small>':""}</label>`).join("")+`<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" id="msAll">Tous</button><button class="btn small ghost" id="msInv">Inverser</button></div>`;
+  panel.innerHTML=Object.entries(CFG.alerts).filter(([,d])=>d.on!==false&&!d.deleted).map(([k,d])=>`<label class="msel-opt" title="${esc(d.h)}"><input type="checkbox" data-at="${k}" ${sel.includes(k)?"checked":""}><span class="dot" style="background:${d.c}"></span><b>${k}</b><span style="flex:1">${esc(d.t)}</span></label>`).join("")+`<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" id="msAll">Tous</button><button class="btn small ghost" id="msInv">Inverser</button></div>`;
 }
 function renderBU(){
   const E=baseFiltered();
@@ -683,15 +692,16 @@ function renderMethodo(){
   <h4>2. Délais ETA / RTA (date pilotage = ${esc($("#pilotDate").value||CFG.pilot)})</h4><p><code>Délai = Date − Date pilotage</code>. Recalculé en local. <b>Négatif = déjà arrivé.</b> Seuils : <code>&lt; 0 alerte</code>, <code>&lt; ${CFG.etaCrit} ETA critique</code>, <code>&lt; ${CFG.rtaCrit} RTA critique</code> (réglables dans Administration).</p>
   <h4>3. SLA par transition (jours, réglables)</h4>
   <p>${Object.entries(CFG.sla).map(([k,v])=>`${k} <b>${v}j</b>`).join(" • ")}. Dépassement = stagnation, alertes A4/A5/A7/A8.</p>
-  <h4>4. Les 10 alertes (poids et sévérités réglables)</h4>
-  <p>${Object.entries(CFG.alerts).map(([k,d])=>`<code>${k}</code> ${d.ico||""} <b>${esc(d.t)}</b> (${d.sev}, +${d.w}${d.on===false?", <b>désactivée</b>":""}) — ${esc(d.h)}`).join("<br>")}</p>
+  <h4>4. Alertes actives (poids et sévérités réglables)</h4>
+  <p>${Object.entries(CFG.alerts).filter(([,d])=>d.on!==false&&!d.deleted).map(([k,d])=>`<code>${k}</code> ${esc(d.ico||"")} <b>${esc(d.t)}</b> (${d.sev}, +${d.w}) — ${esc(d.h)}`).join("<br>")}</p>
   <h4>5. Score de criticité 0–100</h4><p>Somme des poids${" "}• bonus retard &lt;−14j (+10) • ≥3 stagnations (+10). Seuils : <code>≥${CFG.thCrit} Critique</code> • <code>≥${CFG.thHaute} Haute</code> • <code>≥${CFG.thMoy} Moyenne</code> • sinon OK.</p>
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
-function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); renderPins(); }
+function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); renderPins();if(S.drawerId!==undefined&&$("#drawer").classList.contains("open"))openDrawer(S.drawerId); }
 /* ---------- Administration ---------- */
 function renderAdmin(){
+  renderRuleManager();
   $("#cfgPilot").value=$("#pilotDate").value||CFG.pilot;
   $("#cfgThCrit").value=CFG.thCrit; $("#cfgThHaute").value=CFG.thHaute; $("#cfgThMoy").value=CFG.thMoy;
   $("#cfgEtaCrit").value=CFG.etaCrit; $("#cfgRtaCrit").value=CFG.rtaCrit;
@@ -699,6 +709,7 @@ function renderAdmin(){
   $("#cfgSlaGrid").innerHTML=Object.keys(SLA_DEFAULT).map(k=>`<div class="f-field"><label>${slaLabels[k]} (j)</label><input type="number" min="0" max="60" data-sla="${k}" value="${CFG.sla[k]}"></div>`).join("");
   $("#cfgAlertTable tbody").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<tr><td><b>${k}</b> ${d.ico||""}</td><td><b>${esc(d.t)}</b><br><small style="color:#64748b">${esc(d.h)}</small></td><td><input type="checkbox" data-on="${k}" ${d.on!==false?"checked":""} style="width:18px;height:18px"></td><td><select data-sev="${k}">${["Critique","Haute","Moyenne"].map(s=>`<option ${d.sev===s?"selected":""}>${s}</option>`).join("")}</select></td><td><input type="number" min="0" max="50" data-w="${k}" value="${d.w}"></td><td><input type="number" min="0" max="90" data-days="${k}" value="${d.days}" title="Seuil jours (A6/A7/A8/A9)"></td><td><input type="color" class="cfg-color" data-col="${k}" value="${d.c}"></td></tr>`).join("");
   $("#cfgSevColors").innerHTML=["Critique","Haute","Moyenne","OK"].map(s=>`<div class="f-field"><label>${s}</label><div style="display:flex;gap:8px;align-items:center"><input type="color" class="cfg-color" data-sevc="${s}" value="${CFG.sevColors[s]}"><b>${S.enriched.filter(r=>r.crit===s).length} dossiers</b></div></div>`).join("");
+  $$("#cfgAlertTable tbody tr").forEach(row=>{const input=row.querySelector("[data-on]");if(input&&CFG.alerts[input.dataset.on]?.deleted)row.remove();});
 }
 function collectAdmin(){
   CFG.pilot=$("#cfgPilot").value||CFG.pilot;
@@ -714,11 +725,78 @@ function collectAdmin(){
 }
 function applyCfgAndRerender(msg){
   saveCfg(); applySevColors();
-  F.alertTypes=F.alertTypes.filter(k=>CFG.alerts[k]?.on!==false);
+  F.alertTypes=F.alertTypes.filter(k=>CFG.alerts[k]&&CFG.alerts[k].on!==false&&!CFG.alerts[k].deleted);
+  if(S.alertFilter&&(!CFG.alerts[S.alertFilter]||CFG.alerts[S.alertFilter].on===false||CFG.alerts[S.alertFilter].deleted)) S.alertFilter=null;
   $("#pilotDate").value=CFG.pilot;
   if(S.rows.length){ S.enriched=enrichAll(S.rows); fillSelects(); }
   renderAll(); renderMethodo(); renderGuide(); renderAdmin();
+  if(S.drawerId!==undefined&&$("#drawer").classList.contains("open")) openDrawer(S.drawerId);
   if(msg) toast(msg);
+}
+/* Configuration editor and shareable JSON. */
+let editingRule="";
+function renderRuleManager(){
+  $("#ruleManager").innerHTML=Object.entries(CFG.alerts).filter(([,d])=>!d.deleted).map(([code,d])=>`<article class="rule-card ${d.on===false?"muted":""}" style="--rule-color:${d.c}"><div class="rule-card-top"><span class="pill info">${code}</span><span class="rule-state">${d.on===false?"Masquée":"Active"}</span></div><h4>${esc(d.t)}</h4><p>${d.conditions?`${d.conditions.length} condition(s) · ${d.mode==="any"?"OU":"ET"}`:esc(d.h)}</p><div class="rule-card-bottom"><span>${d.sev} · ${d.w} pts</span><div><button class="btn small" data-rule-edit="${code}">Modifier</button><button class="btn small" data-rule-toggle="${code}">${d.on===false?"Afficher":"Masquer"}</button><button class="btn small ghost" data-rule-delete="${code}" aria-label="Supprimer ${esc(d.t)}">Supprimer</button></div></div></article>`).join("");
+}
+function conditionRow(condition={field:"dateETA",op:"olderThan",value:3}){
+  const row=document.createElement("div"); row.className="condition-row";
+  const labels={comments:"Commentaires",delaiETA:"Délai ETA (jours)",delaiRTA:"Délai RTA (jours)",etapeKey:"Étape (code)",stagnCount:"Nombre de stagnations"};
+  row.innerHTML=`<select data-condition="field" aria-label="Champ">${SpotSettings.fields.map(k=>`<option value="${k}" ${k===condition.field?"selected":""}>${esc(labels[k]||FIELDS.find(f=>f.k===k)?.label||k)}</option>`).join("")}</select><select data-condition="op" aria-label="Opérateur">${Object.entries(SpotSettings.operators).map(([k,v])=>`<option value="${k}" ${k===condition.op?"selected":""}>${esc(v)}</option>`).join("")}</select><input data-condition="value" aria-label="Valeur" value="${esc(condition.value??"")}" placeholder="Valeur"><button class="btn small ghost" data-condition-remove aria-label="Retirer cette condition">✕</button>`;
+  const sync=()=>{const op=row.querySelector('[data-condition="op"]').value;const value=row.querySelector('[data-condition="value"]');value.disabled=["empty","present"].includes(op);value.type=["gt","lt","olderThan"].includes(op)?"number":"text";};
+  row.querySelector('[data-condition="op"]').onchange=sync; sync();
+  $("#ruleConditions").appendChild(row);
+}
+function openRule(code=""){
+  editingRule=code;
+  const d=CFG.alerts[code]||{t:"",sev:"Haute",w:15,c:"#e9730c",h:"",mode:"all"};
+  $("#ruleEditorTitle").textContent=code?"Modifier l’alerte "+code:"Nouvelle alerte";
+  $("#ruleLabel").value=d.t; $("#ruleSeverity").value=d.sev; $("#ruleWeight").value=d.w;
+  $("#ruleColor").value=d.c; $("#ruleDescription").value=d.h; $("#ruleMode").value=d.mode||"all";
+  $("#ruleBuiltIn").hidden=!code||!!d.conditions; $("#ruleError").textContent=""; $("#ruleConditions").innerHTML="";
+  if(d.conditions)d.conditions.forEach(conditionRow);else if(!code)conditionRow();
+  $("#ruleBack").classList.add("open"); $("#ruleLabel").focus();
+}
+function saveRule(){
+  try{
+    let code=editingRule;
+    if(!code){let i=1;while(CFG.alerts["R"+i])i++;code="R"+i;}
+    const conditions=$$("#ruleConditions .condition-row").map(row=>({field:row.querySelector('[data-condition="field"]').value,op:row.querySelector('[data-condition="op"]').value,value:row.querySelector('[data-condition="value"]').value}));
+    const rule={...(CFG.alerts[code]||{}),t:$("#ruleLabel").value,sev:$("#ruleSeverity").value,w:Number($("#ruleWeight").value),c:$("#ruleColor").value,h:$("#ruleDescription").value,days:CFG.alerts[code]?.days||0,on:true,deleted:false,ico:"•"};
+    if(conditions.length){rule.conditions=conditions;rule.mode=$("#ruleMode").value;}
+    else if(ALERT_BASE[code]){delete rule.conditions;delete rule.mode;}
+    else throw Error("Ajoutez au moins une condition");
+    CFG=SpotSettings.validate({...CFG,alerts:{...CFG.alerts,[code]:rule}},DEFAULT_CFG);
+    $("#ruleBack").classList.remove("open"); applyCfgAndRerender("Règle enregistrée et appliquée");
+  }catch(err){$("#ruleError").textContent=err.message;}
+}
+function setupSettings(){
+  $("#ruleNew").onclick=()=>openRule();
+  $("#ruleClose").onclick=$("#ruleCancel").onclick=()=>$("#ruleBack").classList.remove("open");
+  $("#conditionAdd").onclick=()=>conditionRow(); $("#ruleSave").onclick=saveRule;
+  $("#ruleConditions").onclick=e=>{if(e.target.closest("[data-condition-remove]"))e.target.closest(".condition-row").remove();};
+  $("#ruleManager").onclick=e=>{
+    const edit=e.target.closest("[data-rule-edit]"),toggle=e.target.closest("[data-rule-toggle]"),del=e.target.closest("[data-rule-delete]");
+    if(edit)openRule(edit.dataset.ruleEdit);
+    if(toggle){const d=CFG.alerts[toggle.dataset.ruleToggle];d.on=d.on===false;applyCfgAndRerender(d.on?"Alerte affichée":"Alerte masquée partout");}
+    if(del){const d=CFG.alerts[del.dataset.ruleDelete];d.deleted=true;d.on=false;applyCfgAndRerender("Alerte supprimée");}
+  };
+  $("#cfgAlertTable").addEventListener("change",e=>{if(e.target.matches("[data-on]")){CFG.alerts[e.target.dataset.on].on=e.target.checked;applyCfgAndRerender("Visibilité mise à jour");}});
+  $("#settingsExport").onclick=()=>{
+    try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);applyCfgAndRerender();download("spot-reglages.json",JSON.stringify({format:"spot-settings",version:1,exportedAt:new Date().toISOString(),settings:CFG},null,2),"application/json");toast("Réglages sauvegardés · JSON prêt à partager");}catch(err){toast(esc(err.message));}
+  };
+  $("#settingsImport").onclick=()=>$("#settingsFile").click();
+  $("#settingsFile").onchange=async e=>{const file=e.target.files[0];e.target.value="";if(!file)return;try{const config=SpotSettings.validate(JSON.parse(await file.text()),DEFAULT_CFG);CFG=config;applyCfgAndRerender("Réglages JSON importés et sauvegardés");}catch(err){toast("Import refusé : "+esc(err.message));}};
+  $("#ruleBack").onclick=e=>{if(e.target===$("#ruleBack"))$("#ruleBack").classList.remove("open");};
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#ruleBack").classList.remove("open");});
+}
+function renderComTiles(arr){
+  $("#comPicker").innerHTML='<option value="">Choisir un COM</option>'+arr.map(a=>`<option value="${esc(a.k)}" ${a.k===S.selCom?"selected":""}>${esc(a.k)}</option>`).join("");
+  $("#comTiles").innerHTML=arr.map(a=>`<button class="com-tile ${S.selCom===a.k?"selected":""}" data-com-tile="${esc(a.k)}"><span class="com-tile-head"><b>${esc(a.k)}</b><span class="pill ${a.avg>=CFG.thHaute?"haute":"ok"}">${a.avg>=CFG.thHaute?"À traiter":"Sous contrôle"}</span></span><strong>${a.n.toLocaleString("fr-FR")} <small>dossiers</small></strong><span class="com-tile-stats"><span>${Math.round(a.rate*100)}% prioritaires</span><span>${Math.round(a.tArch*100)}% clôturés</span></span><span class="progress"><i style="width:${Math.round(a.tArch*100)}%;background:#12805c"></i></span><span class="com-tile-link">Ouvrir la fiche de pilotage →</span></button>`).join("");
+}
+function renderComStatus(rows){
+  const groups=[{label:"À traiter",color:"#d92d20",test:r=>r.crit==="Critique"||r.crit==="Haute"},{label:"En douane",color:"#2563eb",test:r=>["douane","factDouane","bae"].includes(r.etapeKey)},{label:"En livraison",color:"#e9730c",test:r=>["mise","retour"].includes(r.etapeKey)},{label:"À clôturer",color:"#ca8a04",test:r=>["factInt","validFinal","archivage"].includes(r.etapeKey)},{label:"Archivés",color:"#12805c",test:r=>!!r.dateArchivage}];
+  $("#comStatusBoard").innerHTML=groups.map((g,i)=>`<button class="status-tile" data-status="${i}" style="--status-color:${g.color}"><span>${g.label}</span><b>${rows.filter(g.test).length}</b><small>Voir les dossiers →</small></button>`).join("");
+  $$("#comStatusBoard [data-status]").forEach(b=>b.onclick=()=>{const com=S.selCom;setF("com",com);$("#fStep").value=["priority","douane","livraison","cloture","archive"][+b.dataset.status];S.pageMain=0;renderMain();goto("dossiers");});
 }
 /* ---------- Guide d'usage ---------- */
 function renderGuide(){
@@ -739,7 +817,8 @@ function renderGuide(){
 
 /* ---------- Drawer ---------- */
 function openDrawer(i){
-  const r=S.enriched.find(x=>x._i===i); if(!r) return;
+  const source=S.enriched.find(x=>x._i===i); if(!source) return;
+  const r={...source,alerts:visibleAlerts(source)}; S.drawerId=i;
   $("#dPin").textContent=S.pins[i]?"★ Épinglé":"☆ Épingler";
   $("#dCrit").innerHTML=`${pill(r.crit)} <span class="pill info">score ${r.score}</span> <span class="pill grey">${esc(r.etape)}</span>`;
   $("#dTitle").textContent="Dossier "+(r.dossier||"—");
@@ -804,7 +883,7 @@ function fillCadre(){
   const coms=uniq("com"), mets=uniq("metier"), yms=uniqYM(), yrs=uniqYear();
   $("#cadreCom").innerHTML=coms.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
   $("#cadreMetier").innerHTML='<option value="">Tous</option>'+mets.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
-  $("#cadreAlerts").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<option value="${k}">${k} — ${esc(d.t)}${d.on===false?" (désactivée)":""}</option>`).join("");
+  $("#cadreAlerts").innerHTML=Object.entries(CFG.alerts).filter(([,d])=>d.on!==false&&!d.deleted).map(([k,d])=>`<option value="${k}">${k} — ${esc(d.t)}</option>`).join("");
   $("#cadreMonth").innerHTML='<option value="">Tous</option>'+yms.map(v=>`<option value="${v}">${esc(ymLabel(v))}</option>`).join("");
   $("#cadreYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>`<option>${v}</option>`).join("");
   cadreRefresh();
@@ -825,7 +904,7 @@ function cadreRows(){
     if(to&&(!r.dateETA||r.dateETA>to)) return false;
     if(types.length&&!r.alerts.some(a=>types.includes(a.c))) return false;
     return true;
-  });
+  }).map(r=>({...r,alerts:visibleAlerts(r).filter(a=>!types.length||types.includes(a.c))}));
 }
 function cadreRefresh(){ const rows=cadreRows(); $("#cadreInfo").innerHTML=`Périmètre : <b>${rows.length.toLocaleString("fr-FR")} dossiers</b> • ${rows.reduce((s,r)=>s+r.alerts.length,0)} alertes • ${rows.filter(r=>r.crit==="Critique").length} critiques • pilotage du ${fmtD(todayPilot())}`; }
 function cadreBody(rows){
@@ -867,6 +946,7 @@ function openCadre(){ if(!S.enriched.length){ toast("Chargez d'abord l'Excel du 
 /* ---------- Navigation ---------- */
 function goto(v){
   S.activeView=v;
+  setSelect($("#mobileNav"),v);
   $$(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   $$(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+v));
   $("#viewTitle").textContent={overview:"Vue d'ensemble",pilotage:"Pilotage du mois — dossiers du mois",alertes:"Alertes",dossiers:"Dossiers",epingles:"Dossiers épinglés",perfs:"Performance COM",bu:"Vision BU / Section",admin:"Administration",guide:"Guide d'usage",methodo:"Méthodologie"}[v]||v;
@@ -895,7 +975,7 @@ async function ingest(headers, body, fileName){
     const mapped=applyMapping(headers, body, mapping);
     S.rows=mapped; S.enriched=enrichAll(mapped);
     S.pilMonth=F.month;
-    fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide();
+    fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide(); renderAdmin();
     try{ await IDB.put("dossiers",{fileName,rows:mapped}); }catch{}
     toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
     setImportState("loaded",fileName);
@@ -990,7 +1070,7 @@ async function init(){
   $("#btnMinus1").onclick=()=>{ const d=todayPilot(); d.setDate(d.getDate()-1); setPilot(iso(d)); };
   $("#btnPlus1").onclick=()=>{ const d=todayPilot(); d.setDate(d.getDate()+1); setPilot(iso(d)); };
   // admin
-  $("#cfgSave").onclick=()=>{ collectAdmin(); applyCfgAndRerender("💾 <b>Réglages enregistrés</b> (local) — alertes recalculées"); };
+  $("#cfgSave").onclick=()=>{try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);applyCfgAndRerender("Réglages enregistrés · alertes recalculées");}catch(err){toast(esc(err.message));}};
   $("#cfgReset").onclick=()=>{ if(!confirm("Réinitialiser tous les réglages ?"))return; CFG=JSON.parse(JSON.stringify(DEFAULT_CFG)); applyCfgAndRerender("↩ Réglages par défaut restaurés"); };
   $("#cfgToday").onclick=()=>{ $("#cfgPilot").value=iso(new Date()); };
   $("#cfgReport").onclick=()=>{ $("#cfgPilot").value="2026-09-28"; };
@@ -1004,6 +1084,12 @@ async function init(){
   ["pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={pCom:"com",pMetier:"metier",pCrit:"crit",pMonth:"month",pYear:"year",pRtaMonth:"rtaMonth",pRtaYear:"rtaYear"}[id]; setF(k,el.value); });});
   ["pFrom","pTo"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ F.dFrom=$("#pFrom").value; F.dTo=$("#pTo").value; S.pageMain=0; S.pageAlert=0; renderAll(); });});
   $("#pClearF").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
+  setupSettings();
+  $("#mobileNav").onchange=e=>goto(e.target.value);
+  const priorityOption=document.createElement("option");priorityOption.value="priority";priorityOption.textContent="À traiter (Critique + Haute)";$("#fStep").appendChild(priorityOption);
+  const selectCom=com=>{S.selCom=com;renderPerfs();$("#comDetailName").scrollIntoView({behavior:"smooth",block:"center"});};
+  $("#comPicker").onchange=e=>selectCom(e.target.value);
+  $("#comTiles").onclick=e=>{const tile=e.target.closest("[data-com-tile]");if(tile)selectCom(tile.dataset.comTile);};
   loadLocal();
   // épinglés
   $("#mainTable").addEventListener("click",e=>{ const st=e.target.closest("[data-star]"); if(st){ e.stopPropagation(); togglePin(+st.dataset.star); } },true);
@@ -1061,7 +1147,7 @@ async function init(){
   });
   $("#gAlertPanel").addEventListener("click",e=>{
     if(e.target.id==="msAll"){ F.alertTypes=[]; S.pageMain=0; S.pageAlert=0; renderAll(); }
-    if(e.target.id==="msInv"){ const all=Object.keys(CFG.alerts).filter(k=>CFG.alerts[k]?.on!==false); F.alertTypes=all.filter(k=>!F.alertTypes.includes(k)); S.pageMain=0; S.pageAlert=0; renderAll(); }
+    if(e.target.id==="msInv"){ const all=Object.keys(CFG.alerts).filter(k=>CFG.alerts[k]?.on!==false&&!CFG.alerts[k]?.deleted); F.alertTypes=all.filter(k=>!F.alertTypes.includes(k));S.alertFilter=null; S.pageMain=0; S.pageAlert=0; renderAll(); }
   });
   $("#fSearch").addEventListener("input",()=>{S.pageMain=0;renderMain();});
   $("#alertSearch").addEventListener("input",()=>{S.pageAlert=0;renderAlertTable();});
@@ -1085,11 +1171,11 @@ async function init(){
   $("#alertExport").onclick=()=>{const r=filteredAlerts().map(x=>x.r); download("spot_alertes.csv",toCSVParts(r),"text/csv"); toast(fullToast(r.length));};
   $("#alertExportX").onclick=()=>exportXLSX("spot_alertes.xlsx",filteredAlerts().map(x=>x.r));
   $("#perfExport").onclick=()=>{const t=$("#perfTable");let csv="COM;Dossiers;Critique+Haute;Score;Verdict\n";$$("#perfTable tbody tr").forEach(tr=>{csv+=[...tr.children].slice(0,4).map(td=>td.innerText.replace(/\n/g," ")).join(";")+"\n";});download("spot_performance_com.csv","﻿"+csv,"text/csv");};
-  $("#perfExportX").onclick=()=>{ const by={}; S.enriched.forEach(r=>{const k=r.com||"(vide)";(by[k]=by[k]||{n:0,sc:0,crit:0});by[k].n++;by[k].sc+=r.score;by[k].crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0;}); const data=Object.entries(by).map(([k,v])=>({"COM":k,"Dossiers":v.n,"% Crit+Haute":Math.round(v.crit/v.n*100),"Score moyen":(v.sc/v.n).toFixed(1)})); const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"COM"); XLSX.writeFile(wb,"spot_performance_com.xlsx"); toast("⬇ Performance COM exportée (XLSX)"); };
+  $("#perfExportX").onclick=()=>{ const data=perfStats(baseFiltered()).map(v=>({"COM":v.k,"Dossiers":v.n,"% Crit+Haute":Math.round(v.rate*100),"Score moyen":v.avg.toFixed(1)})); const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"COM"); XLSX.writeFile(wb,"spot_performance_com.xlsx"); toast("⬇ Performance COM exportée (XLSX)"); };
   $("#btnExport").onclick=()=>{const r=filteredMain(); download("spot_export_"+(S.fileName||"cockpit").replace(/\.[^.]+$/,"")+".csv",toCSVParts(r),"text/csv"); toast(fullToast(r.length));};
   $("#comDetailSee").onclick=()=>{ if(S.selCom) setF("com",S.selCom); goto("dossiers"); };
-  $("#comDetailCsv").onclick=()=>{ if(!S.selCom) return; const r=S.enriched.filter(x=>x.com===S.selCom); download(`spot_situation_${S.selCom}.csv`,toCSVParts(r),"text/csv"); toast(fullToast(r.length)); };
-  $("#comDetailXlsx").onclick=()=>{ if(S.selCom) exportXLSX(`spot_situation_${S.selCom}.xlsx`,S.enriched.filter(x=>x.com===S.selCom)); };
+  $("#comDetailCsv").onclick=()=>{ if(!S.selCom) return; const r=baseFiltered().filter(x=>x.com===S.selCom); download(`spot_situation_${S.selCom}.csv`,toCSVParts(r),"text/csv"); toast(fullToast(r.length)); };
+  $("#comDetailXlsx").onclick=()=>{ if(S.selCom) exportXLSX(`spot_situation_${S.selCom}.xlsx`,baseFiltered().filter(x=>x.com===S.selCom)); };
   $("#comDetailMail").onclick=()=>{ if(S.selCom) openMailModal(S.selCom); };
   $("#btnReset").onclick=async()=>{ if(!confirm("Effacer les données locales ?"))return; S.rows=[];S.enriched=[];S.fileName="";await IDB.del("dossiers");localStorage.removeItem("spot_mapping");localStorage.removeItem("spot_file");clearAllFilters();fillSelects();renderAll();setImportState("empty");toast("🗑 Données locales effacées"); };
   $("#btnImport").onclick=()=>$("#fileInput").click();
@@ -1105,7 +1191,7 @@ async function init(){
     if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; S.enriched=enrichAll(S.rows); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
     else { fillSelects(); renderAll(); setImportState("empty"); }
   }catch{ fillSelects(); renderAll(); }
-  renderAll();
+  renderAll(); renderAdmin();
 }
 document.readyState==="loading"?document.addEventListener("DOMContentLoaded",init):init();
 })();
