@@ -98,9 +98,9 @@ const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
 /* ---------- État ---------- */
-const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score" };
+const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"" };
 /* Filtres globaux — appliqués à toutes les vues */
-const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[] };
+const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[], clients:[] };
 /* visibilité multi-critères des types d'alerte : vide = tous visibles */
 function matchTypes(r){ return !F.alertTypes.length || r.alerts.some(a=>F.alertTypes.includes(a.c)); }
 function visibleAlerts(r){ return r.alerts.filter(a=>CFG.alerts[a.c]&&CFG.alerts[a.c].on!==false&&!CFG.alerts[a.c].deleted&&(!F.alertTypes.length||F.alertTypes.includes(a.c))); }
@@ -262,6 +262,8 @@ function fillSelects(){
   setSelect($("#gMonth"),F.month); $("#gMonth").innerHTML=optYM(F.month);
   setSelect($("#gYear"),F.year); $("#gYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>`<option ${v===F.year?"selected":""}>${v}</option>`).join("");
   setSelect($("#gCrit"),F.crit);
+  // datalist clients (recherche performance client) — intégral
+  const clOpt=$("#clientOptions"); if(clOpt){ const cur=$("#clientSearch")?.value; clOpt.innerHTML=uniq("client").map(c=>`<option value="${esc(c)}">`).join(""); if(cur!=null) $("#clientSearch").value=cur; }
   // dossiers (miroirs + spécifiques)
   setSelect($("#fCom"),F.com); $("#fCom").innerHTML=opt(F.com,coms,"Tous");
   setSelect($("#fMetier"),F.metier); $("#fMetier").innerHTML=opt(F.metier,mets,"Tous");
@@ -299,6 +301,7 @@ function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
   const mo=monthOv!==undefined?monthOv:F.month, y=yearOv!==undefined?yearOv:F.year, cr=critOv!==undefined?critOv:F.crit;
   if(c&&r.com!==c) return false;
   if(m&&r.metier!==m) return false;
+  if(F.clients.length&&!F.clients.includes(String(r.client||"").trim())) return false;
   if(mo&&r.etaYM!==mo) return false;
   if(y&&r.etaYear!==y) return false;
   if(cr&&r.crit!==cr) return false;
@@ -325,7 +328,7 @@ function setF(key,val){
   renderAll();
 }
 function clearAllFilters(){
-  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[];
+  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[]; F.clients=[]; S.clientQ="";
   S.pilMonth=""; setSelect($("#pilMonth"),"");
   ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear","pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear","pFrom","pTo"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
@@ -664,6 +667,38 @@ function renderComDetail(){
   tb.innerHTML=top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}" data-tip="${esc(tipHTML(r))}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc((r.client||"").slice(0,26))}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td><td style="white-space:normal;min-width:200px;font-size:12px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:#64748b">—</td></tr>';
   $$("#comDetailTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
+/* Multi-sélecteur des clients visibles (toutes pages) — recherche incluse */
+function renderClientMulti(){
+  const btn=$("#gClientBtn"); if(!btn) return;
+  const sel=F.clients;
+  btn.innerHTML=sel.length?`👥 ${esc(sel.slice(0,2).join(", "))}${sel.length>2?` (+${sel.length-2})`:""} ▾`:"👥 Tous ▾";
+  btn.title=sel.length?`Clients visibles : ${sel.join(", ")}`:"Choisir les clients visibles sur toutes les pages";
+}
+function renderClientPanel(){
+  const panel=$("#gClientPanel"); if(!panel) return;
+  const q=norm(S.clientQ||"");
+  let list=uniq("client");
+  if(q) list=list.filter(c=>norm(c).includes(q));
+  const cap=200, more=list.length>cap;
+  const shown=list.slice(0,cap);
+  panel.innerHTML=`<div style="position:sticky;top:0;background:#fff;padding:2px 2px 6px"><input id="gClientQ" placeholder="Rechercher un client…" value="${esc(S.clientQ||"")}" style="width:100%;border:1px solid var(--agl-line);border-radius:8px;padding:7px;font-size:12.5px"></div>`
+    +(shown.length?shown.map(c=>`<label class="msel-opt" title="${esc(c)}"><input type="checkbox" data-cl="${esc(c)}" ${F.clients.includes(c)?"checked":""}><span style="flex:1">${esc(c)}</span></label>`).join(""):'<p style="color:#64748b;font-size:12px;padding:6px">Aucun client trouvé.</p>')
+    +(more?`<p style="color:#64748b;font-size:11px;padding:4px 6px">+${list.length-cap} autres — affinez la recherche.</p>`:"")
+    +`<div style="display:flex;gap:6px;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:6px"><button class="btn small" id="clAll">Tous</button><button class="btn small ghost" id="clInv">Inverser</button></div>`;
+  const qEl=$("#gClientQ"); qEl.focus(); qEl.setSelectionRange(qEl.value.length,qEl.value.length);
+  qEl.oninput=e=>{ S.clientQ=e.target.value; renderClientPanel(); };
+  panel.onchange=e=>{
+    const cb=e.target.closest?e.target.closest("input[data-cl]"):null; if(!cb) return;
+    const c=cb.dataset.cl;
+    if(cb.checked){ if(!F.clients.includes(c)) F.clients.push(c); }
+    else { F.clients=F.clients.filter(x=>x!==c); }
+    S.pageMain=0; S.pageAlert=0; renderAll();
+  };
+  panel.onclick=e=>{
+    if(e.target.id==="clAll"){ F.clients=[]; S.clientQ=""; S.pageMain=0; S.pageAlert=0; renderAll(); }
+    if(e.target.id==="clInv"){ const all=uniq("client"); F.clients=all.filter(c=>!F.clients.includes(c)); S.pageMain=0; S.pageAlert=0; renderAll(); }
+  };
+}
 /* Multi-sélecteur des types d'alerte visibles (toutes pages) */
 function renderAlertMulti(){
   const btn=$("#gAlertBtn"), panel=$("#gAlertPanel");
@@ -680,7 +715,8 @@ function renderBU(){
   $("#buBars").innerHTML=arrM.length?arrM.map(([k,v])=>`<div class="bar-row"><span>Métier ${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/max*100)}%;background:#0f2a52"></div></div><b>${v}</b></div>`).join(""):"<div class='empty-state'><b>Aucune donnée</b>Chargez votre export Excel.</div>";
   const byC={}; E.forEach(r=>{if(r.crit==="Critique"||r.crit==="Haute"){const k=r.client||"(vide)";byC[k]=(byC[k]||0)+1;}});
   const arrC=Object.entries(byC).sort((a,b)=>b[1]-a[1]); const maxC=Math.max(1,...arrC.map(a=>a[1]));
-  $("#clientBars").innerHTML=(arrC.map(([k,v])=>`<div class="bar-row"><span>${esc(k.slice(0,24))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxC*100)}%;background:#d92d20"></div></div><b>${v}</b></div>`).join(""))||"<p style='color:#64748b'>—</p>";
+  $("#clientBars").innerHTML=(arrC.map(([k,v])=>`<div class="bar-row" data-client="${esc(k)}" style="cursor:pointer" title="Voir la performance client de ${esc(k)}"><span>${esc(k.slice(0,24))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxC*100)}%;background:#d92d20"></div></div><b>${v}</b></div>`).join(""))||"<p style='color:#64748b'>—</p>";
+  $$("#clientBars [data-client]").forEach(el=>el.onclick=()=>{ S.selClient=el.dataset.client; $("#clientSearch").value=S.selClient; renderClientDetail(); goto("perfs"); });
   const cc=$("#clientCount"); if(cc) cc.textContent=`(${arrC.length} clients)`;
   const mets=[...new Set(E.map(r=>r.metier||"(vide)"))].slice(0,12);
   $("#buMatrix tbody").innerHTML=mets.map(m=>{const rows=E.filter(r=>(r.metier||"(vide)")===m);const c=k=>rows.filter(r=>r.etapeKey===k||(k==="archive"&&r.dateArchivage)).length;return `<tr><td><b>${esc(m)}</b></td><td>${rows.length}</td><td>${c("validation")}</td><td>${c("docs")}</td><td>${c("note")}</td><td>${c("douane")}</td><td>${c("bae")}</td><td>${c("mise")+c("retour")}</td><td>${c("factInt")+c("validFinal")}</td><td>${rows.filter(r=>r.dateArchivage).length}</td></tr>`;}).join("")||'<tr><td colspan="10"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel.</div></td></tr>';
@@ -698,7 +734,7 @@ function renderMethodo(){
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
-function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); renderPins();if(S.drawerId!==undefined&&$("#drawer").classList.contains("open"))openDrawer(S.drawerId); }
+function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); renderClientMulti(); renderPins(); renderClientDetail();if(S.drawerId!==undefined&&$("#drawer").classList.contains("open"))openDrawer(S.drawerId); }
 /* ---------- Administration ---------- */
 function renderAdmin(){
   renderRuleManager();
@@ -732,6 +768,35 @@ function applyCfgAndRerender(msg){
   renderAll(); renderMethodo(); renderGuide(); renderAdmin();
   if(S.drawerId!==undefined&&$("#drawer").classList.contains("open")) openDrawer(S.drawerId);
   if(msg) toast(msg);
+}
+/* Performance client : KPIs, états cliquables, alertes, top dossiers */
+function renderClientDetail(){
+  const body=$("#clientPerfBody"); if(!body) return;
+  const client=S.selClient;
+  if(!client){ body.innerHTML='<div class="empty-state"><b>Sélectionnez un client</b>Recherchez un client ci-dessus pour voir ses états, ses KPIs et ses alertes.</div>'; return; }
+  const rows=baseFiltered().filter(r=>r.client===client);
+  const n=rows.length||1;
+  const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length;
+  const etaMed=(()=>{const v=rows.map(r=>r.delaiETA).filter(v=>v!=null).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length/2)]:null;})();
+  const bae=rows.filter(r=>r.dateBAE).length, arch=rows.filter(r=>r.dateArchivage).length;
+  const kpis=[
+    {l:"Dossiers",v:rows.length,s:"périmètre filtré",c:"#0f2a52"},
+    {l:"Critiques",v:crit,s:`${Math.round(crit/n*100)}%`,c:sevColor("Critique")},
+    {l:"Hautes",v:haute,s:`${Math.round(haute/n*100)}%`,c:sevColor("Haute")},
+    {l:"Retard ETA médian",v:etaMed==null?"—":etaMed+"j",s:"délai médian",c:etaMed<0?"#d92d20":"#12805c"},
+    {l:"Taux BAE",v:Math.round(bae/n*100)+"%",s:"BAE obtenus",c:"#2563eb"},
+    {l:"Taux archivé",v:Math.round(arch/n*100)+"%",s:"clôturés",c:"#12805c"},
+  ];
+  const groups=[{label:"À traiter",color:"#d92d20",test:r=>r.crit==="Critique"||r.crit==="Haute",step:"priority"},{label:"En douane",color:"#2563eb",test:r=>["douane","factDouane","bae"].includes(r.etapeKey),step:"douane"},{label:"En livraison",color:"#e9730c",test:r=>["mise","retour"].includes(r.etapeKey),step:"livraison"},{label:"À clôturer",color:"#ca8a04",test:r=>["factInt","validFinal","archivage"].includes(r.etapeKey),step:"cloture"},{label:"Archivés",color:"#12805c",test:r=>!!r.dateArchivage,step:"archive"}];
+  const byA={}; rows.forEach(r=>visibleAlerts(r).forEach(a=>byA[a.c]=(byA[a.c]||0)+1));
+  const arrA=Object.entries(byA).sort((a,b)=>b[1]-a[1]).slice(0,5); const mxA=Math.max(1,...arrA.map(x=>x[1]));
+  const top=[...rows].sort((a,b)=>b.score-a.score).slice(0,8);
+  body.innerHTML=`<div class="kpi-grid" style="grid-template-columns:repeat(6,1fr)">${kpis.map(k=>`<div class="kpi" style="--kpi-c:${k.c}"><label>${k.l}</label><strong>${k.v}</strong><span>${k.s}</span></div>`).join("")}</div>
+  <div class="com-status-board" style="padding:0 0 12px">${groups.map(g=>`<button class="status-tile" data-clstep="${g.step}" style="--status-color:${g.color}"><span>${g.label}</span><b>${rows.filter(g.test).length}</b><small>Voir les dossiers →</small></button>`).join("")}</div>
+  <div class="panels"><div class="card"><div class="card-h"><h3>Alertes dominantes</h3></div><div class="card-b"><div class="bars">${arrA.length?arrA.map(([k,v])=>{const d=alertDef(k);return `<div class="bar-row"><span><span class="dot" style="background:${d.c}"></span>${k} — ${esc(d.t)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mxA*100)}%;background:${d.c}"></div></div><b>${v}</b></div>`;}).join(""):"<p style='color:#64748b'>Aucune alerte active.</p>"}</div></div></div>
+  <div class="card"><div class="card-h"><h3>Top dossiers du client</h3></div><div class="table-wrap" style="max-height:280px"><table><thead><tr><th>Score</th><th>N° dossier</th><th>COM</th><th>ETA / Délai</th><th>Étape</th><th>Alertes</th></tr></thead><tbody>${top.map(r=>`<tr data-i="${r._i}" style="cursor:pointer" class="${r.crit==="Critique"?"crit":""}" data-tip="${esc(tipHTML(r))}"><td><b style="color:${sevColor(r.crit)}">${r.score}</b></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td>${visibleAlerts(r).slice(0,3).map(a=>`<span class="pill ${alertDef(a.c).sev==="Critique"?"crit":alertDef(a.c).sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}</td></tr>`).join("")||'<tr><td colspan="6" style="text-align:center;color:#64748b">Aucun dossier sur ce périmètre.</td></tr>'}</tbody></table></div></div></div>`;
+  $$("#clientPerfBody [data-clstep]").forEach(b=>b.onclick=()=>{ $("#fClient").value=client; $("#fStep").value=b.dataset.clstep; S.pageMain=0; renderMain(); goto("dossiers"); });
+  $$("#clientPerfBody tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 /* Configuration editor and shareable JSON. */
 let editingRule="";
@@ -1136,7 +1201,10 @@ async function init(){
   $("#gClear").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
   // multi-sélecteur types d'alerte (toutes pages)
   $("#gAlertBtn").onclick=e=>{ e.stopPropagation(); $("#gAlertPanel").classList.toggle("open"); };
-  document.addEventListener("click",e=>{ const w=$("#gAlertWrap"); if(w&&!w.contains(e.target)) $("#gAlertPanel").classList.remove("open"); });
+  document.addEventListener("click",e=>{ const w=$("#gAlertWrap"); if(w&&!w.contains(e.target)) $("#gAlertPanel").classList.remove("open"); const wc=$("#gClientWrap"); if(wc&&!wc.contains(e.target)) $("#gClientPanel").classList.remove("open"); });
+  // multi-sélecteur clients (toutes pages) avec recherche
+  $("#gClientBtn").onclick=e=>{ e.stopPropagation(); const p=$("#gClientPanel"); const open=!p.classList.contains("open"); if(open) renderClientPanel(); p.classList.toggle("open",open); };
+  $("#clientSearch").addEventListener("change",e=>{ S.selClient=e.target.value.trim(); e.target.blur(); renderClientDetail(); });
   $("#gAlertPanel").addEventListener("change",e=>{
     const cb=e.target.closest?e.target.closest("input[data-at]"):null; if(!cb) return;
     const k=cb.dataset.at;

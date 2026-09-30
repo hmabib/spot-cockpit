@@ -72,6 +72,7 @@
       <div class="f-field"><label>Année (ETA)</label><select id="gYear"><option value="">Toutes</option></select></div>
       <div class="f-field"><label>Criticité</label><select id="gCrit"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>OK</option></select></div>
       <div class="f-field"><label>Types d'alerte (1 ou +)</label><div class="msel" id="gAlertWrap"><button class="btn small" id="gAlertBtn" title="Choisir les types d'alerte visibles sur toutes les pages">🚨 Toutes ▾</button><div class="msel-panel" id="gAlertPanel"></div></div></div>
+      <div class="f-field"><label>Clients (1 ou +)</label><div class="msel" id="gClientWrap"><button class="btn small" id="gClientBtn" title="Choisir les clients visibles sur toutes les pages">👥 Tous ▾</button><div class="msel-panel" id="gClientPanel"></div></div></div>
       <button class="btn small ghost" id="gClear" title="Réinitialiser tous les filtres">Effacer</button>
       <span class="pill info" id="gCount">0 dossier</span>
     </div>
@@ -186,6 +187,7 @@
       <div class="section-heading"><div><span class="eyebrow">PILOTAGE COMMERCIAL</span><h3>Votre portefeuille, en un regard</h3><p>Sélectionnez un COM pour suivre ses états et les dossiers à traiter.</p></div><div class="f-field"><label for="comPicker">Fiche de pilotage COM</label><select id="comPicker"><option value="">Choisir un COM</option></select></div></div>
       <div class="kpi-grid" id="perfKpis" style="grid-template-columns:repeat(4,1fr)"></div>
       <div class="com-tiles" id="comTiles"></div>
+      <div class="card" id="clientPerfCard"><div class="card-h"><h3>👥 Performance client</h3><span class="hint">KPIs, états, alertes et dossiers du client — les tuiles ouvrent ses dossiers filtrés</span><span class="f-field" style="margin-left:auto;min-width:280px"><label>Rechercher un client</label><input id="clientSearch" list="clientOptions" placeholder="Tapez le nom du client…"><datalist id="clientOptions"></datalist></span></div><div class="card-b" id="clientPerfBody"></div></div>
       <details class="detail-section"><summary>Comparer les COM · classement détaillé</summary>
       <div class="card"><div class="card-h"><h3>🏆 Classement des COM — performance vs difficulté</h3><span class="hint">Score = criticité moyenne pondérée + retards + stagnation. Cliquez un COM pour voir ses dossiers. ✉️ pour envoyer sa situation par e-mail.</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" id="perfExport">⬇ CSV</button><button class="btn small" id="perfExportX">⬇ XLSX</button></span></div>
       <div class="table-wrap"><table id="perfTable"><thead><tr><th>COM</th><th>Dossiers</th><th>% Critique+Haute</th><th>Score difficulté</th><th>Retard ETA médian</th><th>Taux BAE</th><th>Taux archivage</th><th>Verdict</th><th>Situation</th></tr></thead><tbody></tbody></table></div></div>

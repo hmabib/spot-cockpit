@@ -81,6 +81,11 @@ vercel --prod
 
 ## 7. Fichiers
 
+### Filtres client et performance client (v12)
+
+- **Filtre Clients (1 ou +)** dans la barre globale, permanent sur toutes les pages : cases à cocher avec **recherche**, boutons Tous / Inverser ; se combine avec les autres filtres globaux.
+- **Performance client** (onglet Performance COM) : recherche avec suggestions, 6 KPIs, 5 états cliquables (ouvrent les dossiers filtrés du client), alertes dominantes et top dossiers. Les clients à risque de la Vision BU ouvrent aussi cette fiche.
+
 ### Performance COM et règles partagées (v11)
 
 - Tuiles COM, sélecteur de portefeuille et fiche de pilotage : états **à traiter / douane / livraison / clôture / archivés**, cliquables vers les dossiers filtrés. Classement et analyse SLA repliables.
