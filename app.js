@@ -738,15 +738,23 @@ function durationStats(values){
   return {n,sum:ds.reduce((s,d)=>s+d,0),mean:ds.reduce((s,d)=>s+d,0)/n,median:n%2?ds[Math.floor(n/2)]:(ds[n/2-1]+ds[n/2])/2,min:ds[0],max:ds[n-1]};
 }
 function stepStats(rows){
-  const seq=processSeq(), out=[],pilot=todayPilot();
+  const seq=processSeq(), out=[],pilot=todayPilot(), total=rows.length;
   for(let i=0;i<seq.length-1;i++){
     const [la,ka]=seq[i],[lb,kb]=seq[i+1];
-    const ds=[],waiting=[];let inversions=0;
-    rows.forEach(r=>{const a=r[ka],b=r[kb];if(!a)return;if(b){const d=diffJ(b,a);if(d>=0)ds.push(d);else inversions++;}else if(!r.dateArchivage&&!seq.slice(i+2).some(([,key])=>r[key])){const age=diffJ(pilot,a);if(age>=0)waiting.push(age);}});
-    if(!ds.length&&!waiting.length&&!inversions) continue;
+    const ds=[],waiting=[];let inversions=0,closed=0,missing=0,future=0;
+    rows.forEach(r=>{
+      const a=r[ka],b=r[kb];
+      if(!a){missing++;return;}
+      if(b){const d=diffJ(b,a);if(d>=0)ds.push(d);else inversions++;return;}
+      if(r.dateArchivage||seq.slice(i+2).some(([,key])=>r[key])){closed++;return;}
+      const age=diffJ(pilot,a);
+      if(age>=0)waiting.push(age);else future++;
+    });
+    if(!total) continue;
     const stats=durationStats(ds),age=durationStats(waiting);
     const buckets=[["0–2 j",d=>d<=2],["3–7 j",d=>d>2&&d<=7],["8–14 j",d=>d>7&&d<=14],[">14 j",d=>d>14]].map(([label,test])=>({label,n:ds.filter(test).length,pct:ds.length?ds.filter(test).length/ds.length*100:0}));
-    out.push({from:la,to:lb,n:ds.length,mean:stats?.mean??null,median:stats?.median??null,min:stats?.min??null,max:stats?.max??null,sum:stats?.sum??0,waiting:waiting.length,age:age?.median??null,inversions,buckets});
+    const share=x=>total?x/total*100:0;
+    out.push({from:la,to:lb,total,n:ds.length,mean:stats?.mean??null,median:stats?.median??null,min:stats?.min??null,max:stats?.max??null,sum:stats?.sum??0,waiting:waiting.length,age:age?.median??null,inversions,closed,missing,future,qTerm:share(ds.length),qWait:share(waiting.length),qInv:share(inversions),qClosed:share(closed),qMissing:share(missing),qFuture:share(future),coverage:share(ds.length+inversions),buckets});
   }
   const tot=out.reduce((s,p)=>s+p.sum,0)||1;
   out.forEach(p=>p.pct=p.sum/tot*100);
@@ -812,7 +820,11 @@ function renderEvolution(){
   $$("#evoMonths tbody tr").forEach(tr=>tr.onclick=()=>{const title=tr.querySelector("td b");if(!title)return;const ym=uniqYM().find(y=>ymLabel(y)===title.textContent);if(ym)setF("month",ym);});
   // horloge des temps de traitement : moyenne, médiane, min, max, part du cycle
   const mxS=Math.max(1,...pairs.map(p=>p.mean||0));
-  $("#evoSteps tbody").innerHTML=pairs.map(p=>`<tr><td><b>${esc(p.from)} → ${esc(p.to)}</b><br><small>${p.n} séquences terminées · ${p.waiting} en attente${p.age!==null?` (âge médian ${p.age}j)`:""} · ${p.inversions} inversions exclues</small></td><td><b>${p.mean!==null?p.mean.toFixed(1)+"j":"—"}</b></td><td>${p.median!==null?p.median+"j":"—"}</td><td>${p.min!==null?p.min+"j":"—"}</td><td>${p.max!==null?p.max+"j":"—"}</td><td><div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.mean||0)/mxS*100)}%;background:#2563eb"></div></div><small>${p.pct.toFixed(1)}% des jours observés</small></td><td>${p.buckets.map(b=>`${b.label} : ${b.pct.toFixed(0)}%`).join("<br>")}</td></tr>`).join("")||'<tr><td colspan="7"><div class="empty-state"><b>Pas assez de dates renseignées</b></div></td></tr>';
+  const qseg=(w,c)=>w>0?`<i style="width:${Math.max(1.2,w)}%;background:${c}"></i>`:"";
+  $("#evoSteps tbody").innerHTML=pairs.map(p=>{
+    const qtip=esc(`${p.qTerm.toFixed(1)}% terminées · ${p.qWait.toFixed(1)}% en attente · ${p.qInv.toFixed(1)}% inversions · ${p.qClosed.toFixed(1)}% clôturées sans étape · ${p.qFuture.toFixed(1)}% départ futur · ${p.qMissing.toFixed(1)}% sans date départ`);
+    return `<tr><td><b>${esc(p.from)} → ${esc(p.to)}</b><br><small style="color:#64748b">${p.n} terminées · ${p.waiting} en attente${p.age!==null?` (âge médian ${p.age}j)`:""} · ${p.inversions} inversions · ${p.closed} sans étape · ${p.missing} sans date</small></td><td><b>${p.mean!==null?p.mean.toFixed(1)+"j":"—"}</b></td><td>${p.median!==null?p.median+"j":"—"}</td><td>${p.min!==null?p.min+"j":"—"}</td><td>${p.max!==null?p.max+"j":"—"}</td><td><div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.mean||0)/mxS*100)}%;background:#2563eb"></div></div><small>${p.pct.toFixed(1)}% des jours observés</small></td><td>${p.buckets.map(b=>`${b.label} : ${b.pct.toFixed(0)}%`).join("<br>")}</td><td style="min-width:190px"><div class="stack" title="${qtip}">${qseg(p.qTerm,"#12805c")}${qseg(p.qWait,"#e9730c")}${qseg(p.qInv,"#d92d20")}${qseg(p.qClosed,"#2563eb")}${qseg(p.qFuture,"#7c3aed")}${qseg(p.qMissing,"#cbd5e1")}</div><small style="color:#64748b">${p.coverage.toFixed(1)}% avec les 2 dates${p.qMissing>0?` · ${p.qMissing.toFixed(1)}% sans date départ`:""}</small></td></tr>`;
+  }).join("")||'<tr><td colspan="8"><div class="empty-state"><b>Pas assez de dates renseignées</b></div></td></tr>';
   $("#evoHistory tbody").innerHTML=monthlyHistory(rows).map(([key,o])=>`<tr><td><b>${esc(ymLabel(key))}</b></td><td>${o.opened}</td><td>${o.arrived}</td><td>${o.delivered}</td><td>${o.archived}</td><td>${o.states.slice(0,-1).reduce((s,n)=>s+n,0)}</td><td>${o.states.map((n,i)=>n?`${esc(STEPS[i].label)} : ${n}`:"").filter(Boolean).join("<br>")||"—"}</td></tr>`).join("")||'<tr><td colspan="7">Aucun historique daté disponible.</td></tr>';
 }
 function renderBU(){

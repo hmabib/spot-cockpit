@@ -10,17 +10,22 @@ const rows=[
   {dateETA:d(8),dateRTA:d(10),dateValidation:d(1),dateDocs:d(3),dateArchivage:d(15),dossier:'1',com:'A',client:'C'},
   {dateETA:d(11),dateRTA:d(9),dateValidation:d(1),dateDocs:d(5),dossier:'2',com:'A',client:'C'},
   {dateValidation:d(5),dateDocs:d(2),dossier:'3',com:'A',client:'C'},
-  {dateValidation:d(8),dossier:'4',com:'A',client:'C'}
+  {dateValidation:d(8),dossier:'4',com:'A',client:'C'},
+  {dateDocs:d(5),dossier:'5',com:'A',client:'C'},
+  {dateValidation:d(1),dateArchivage:d(20),dossier:'6',com:'A',client:'C'}
 ];
 const stats=api.stepStats(rows);
 const first=stats.find(p=>p.from==='Validation');
 assert.equal(first.n,2);assert.equal(first.mean,3);assert.equal(first.median,3);
 assert.equal(first.min,2);assert.equal(first.max,4);assert.equal(first.inversions,1);
 assert.equal(first.waiting,1);assert.equal(first.age,20);
+assert.equal(first.total,6);assert.equal(first.missing,1);assert.equal(first.closed,1);assert.equal(first.future,0);
+assert(Math.abs(first.qTerm+first.qWait+first.qInv+first.qClosed+first.qMissing+first.qFuture-100)<1e-9);
+assert.equal(first.coverage,50);
 assert.equal(first.buckets[0].pct,50);assert.equal(first.buckets[1].pct,50);
 assert(!stats.some(p=>p.from.includes('ETA')||p.from.includes('RTA')));
 assert.equal(api.etaRtaStats(rows).median,0);assert.equal(api.etaRtaStats(rows).early,1);
-assert.equal(api.cycleStats(rows).mean,14);
+assert.equal(api.cycleStats(rows).mean,16.5);
 assert.equal(api.durationStats([0,0]).median,0);
 assert.equal(api.durationStats([]),null);
 assert(Math.abs(stats.reduce((s,p)=>s+p.pct,0)-100)<1e-9);
@@ -28,10 +33,10 @@ const enriched=api.enrichAll(rows);
 assert(!enriched[0].inv.length,'La préparation avant RTA ne doit pas être une inversion');
 assert(enriched[2].inv.length,'Inversion documentaire réelle détectée');
 api.F.hideArchived=true;
-assert.equal(enriched.filter(r=>api.matchGlobal(r)).length,3);
+assert.equal(enriched.filter(r=>api.matchGlobal(r)).length,4);
 const history=api.monthlyHistory(rows);
 assert.equal(history[0][0],'2026-09');assert.equal(history[0][1].arrived,2);
-assert.equal(history[0][1].archived,1);
+assert.equal(history[0][1].archived,2);
 const future=[{dateValidation:new Date(2026,9,1)}];
 assert.equal(api.monthlyHistory(future).length,0);
-console.log('PASS : ETA/RTA séparées du process, médiane paire, cycle réalisé, attentes, inversions, pourcentages, historique et archives');
+console.log('PASS : ETA/RTA séparées du process, médiane paire, cycle réalisé, attentes, inversions, qualité (% partition), historique et archives');
