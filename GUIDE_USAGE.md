@@ -57,6 +57,11 @@ Onglet **Performance COM** : classement **complet** (tous les COM, scroll), verd
 - **✉️** ouvrir la fenêtre **Situation COM** : destinataire, objet auto (`SPOT [date] — Situation COM …`), corps auto (KPI, 8 cas prioritaires, extraits commentaires, seuils), boutons **Copier**, **⬇ CSV du COM**, **Ouvrir dans ma messagerie** (pensez à joindre le CSV — `mailto:` ne joint pas tout seul).
 - **Panneau détail** sous le classement (clic sur une ligne) : 6 KPIs du COM, répartition criticité, alertes dominantes (cliquables → Alertes), **volume par mois ETA (tous les mois)**, **⏱ délais moyens entre étapes vs SLA** (positionnement du COM dans le process), top 8 dossiers (clic = fiche), boutons Dossiers/CSV/XLSX/E-mail.
 
+## 6bis. Évolution : archivés, pastille 💬, historique et temps de traitement
+- Barre globale : **Archivés masqués** (toggle permanent — vues, rapports et exports ; mémorisé ; *Effacer* les ré-affiche) et **Pastille 💬** (repère les dossiers commentés dans les tableaux ; mémorisée).
+- Onglet **Évolution** : **ETA = prévision, RTA = arrivée réelle** (leur écart peut être négatif = avance). Historique mensuel des jalons **réellement datés** (ouvertures, arrivées RTA, livraisons, archivages, en-cours fin de mois) + état actuel par **cohorte ETA** (clic sur un mois = filtre global).
+- **Temps de traitement par séquence** (Validation → Archivage) : moyenne, médiane exacte, min/max, séquences terminées, attentes en cours (âge médian), inversions exclues, répartition 0–2 / 3–7 / 8–14 / >14 j et part des jours observés. Préparer un dossier avant la RTA **n'est pas** une inversion.
+
 ## 7. Dossiers : filtres multicritères
 Globaux + `Sous-métier / Client / Sous-compte / Mois / Année / Recherche textuelle / Filtre délai (ETA, RTA, stagnation, blocage BAE) / ETA du…au… / Étape`. Tri en cliquant les en-têtes, **pagination 100 à 1000 lignes/page (réglable)**, **CSV / XLSX / JSON intégraux** des lignes filtrées (compteur annoncé, aucune omission). Toutes les autres listes (COM, métiers, clients, mois, matrice BU) sont **intégrales et scrollables**.
 

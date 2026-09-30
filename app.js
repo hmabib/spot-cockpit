@@ -21,8 +21,8 @@ const STEPS = [
 ];
 const SLA_DEFAULT = {validation:3, docs:2, note:2, douane:3, factDouane:3, bae:2, mise:3, retour:5, factInt:3, validFinal:5};
 const ALERT_BASE = {
-  A1:{t:"ETA dépassée, BAE manquant", sev:"Critique", c:"#d92d20", h:"Le navire est arrivé (ETA < pilotage) mais pas de BAE → risque surestaries / blocage client.", w:30, days:0, on:true, ico:"🚢"},
-  A2:{t:"RTA dépassée, non archivé", sev:"Haute", c:"#e9730c", h:"RTA passée et dossier non archivé → clôture en retard.", w:20, days:0, on:true, ico:"📦"},
+  A1:{t:"ETA dépassée, BAE manquant", sev:"Critique", c:"#d92d20", h:"L'arrivée estimée est dépassée sans BAE. L'ETA ne confirme pas l'arrivée réelle ; consulter la RTA.", w:30, days:0, on:true, ico:"🚢"},
+  A2:{t:"RTA passée, non archivé", sev:"Haute", c:"#e9730c", h:"La RTA atteste l'arrivée réelle des marchandises. Le dossier reste à clôturer ; son âge se calcule depuis cette arrivée.", w:20, days:0, on:true, ico:"📦"},
   A3:{t:"Inversion chronologique", sev:"Critique", c:"#d92d20", h:"Une étape est datée avant l'étape précédente → erreur de saisie ou contournement process.", w:25, days:0, on:true, ico:"🔀"},
   A4:{t:"Stagnation amont (> SLA)", sev:"Haute", c:"#e9730c", h:"Validation → Docs → Note bloqués plus longtemps que le SLA.", w:15, days:0, on:true, ico:"⏳"},
   A5:{t:"Stagnation douane", sev:"Haute", c:"#e9730c", h:"Enregistrement sans facture, ou facture sans BAE (dépassement SLA).", w:15, days:0, on:true, ico:"🏛️"},
@@ -100,7 +100,11 @@ const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date
 /* ---------- État ---------- */
 const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"" };
 /* Filtres globaux — appliqués à toutes les vues */
-const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[], clients:[] };
+const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[], clients:[], hideArchived:false };
+/* Préférences persistantes (toggles) */
+S.prefs={commentBadge:true};
+function loadPrefs(){ try{ const p=JSON.parse(localStorage.getItem("spot_prefs")||"{}"); S.prefs={commentBadge:p.commentBadge!==false}; F.hideArchived=!!p.hideArchived; }catch{} const ha=$("#gHideArchived"); if(ha) ha.checked=F.hideArchived; const cb=$("#gCommentBadge"); if(cb) cb.checked=S.prefs.commentBadge; }
+function savePrefs(){ try{ localStorage.setItem("spot_prefs",JSON.stringify({commentBadge:S.prefs.commentBadge,hideArchived:F.hideArchived})); }catch{} }
 /* visibilité multi-critères des types d'alerte : vide = tous visibles */
 function matchTypes(r){ return !F.alertTypes.length || r.alerts.some(a=>F.alertTypes.includes(a.c)); }
 function visibleAlerts(r){ return r.alerts.filter(a=>CFG.alerts[a.c]&&CFG.alerts[a.c].on!==false&&!CFG.alerts[a.c].deleted&&(!F.alertTypes.length||F.alertTypes.includes(a.c))); }
@@ -225,13 +229,13 @@ function enrichRow(r, P, counts){
     pushStag(r.dateValidFinal,r.dateArchivage,SLA.validFinal,"ValidFin→Archiv");
     // inversions
     const inv=[]; let prev=null, prevL="";
-    [...(r.dateETA?[["ETA",r.dateETA]]:[]), ...(r.dateRTA?[["RTA",r.dateRTA]]:[]), ...STEPS.map(s=>[s.label,r[s.dateKey]])].forEach(([l,d])=>{
+    STEPS.map(s=>[s.label,r[s.dateKey]]).forEach(([l,d])=>{
       if(d){ if(prev&&d<prev) inv.push(prevL+" → "+l); prev=d; prevL=l; } 
     });
     // alertes (paramétrables depuis Administration)
     const al=[];
     const on=k=>!!CFG.alerts[k]&&CFG.alerts[k].on!==false&&!CFG.alerts[k].deleted&&!CFG.alerts[k].conditions;
-    if(on("A1")&&r.dateETA&&delaiETA!=null&&delaiETA<0&&!r.dateBAE) al.push({c:"A1",d:`ETA ${fmtD(r.dateETA)} dépassée de ${-delaiETA}j sans BAE`});
+    if(on("A1")&&r.dateETA&&delaiETA!=null&&delaiETA<0&&!r.dateBAE) al.push({c:"A1",d:`Arrivée estimée ${fmtD(r.dateETA)} dépassée de ${-delaiETA}j sans BAE · ${r.dateRTA?"arrivée réelle : "+fmtD(r.dateRTA):"RTA non renseignée : arrivée réelle non confirmée"}`});
     if(on("A2")&&r.dateRTA&&delaiRTA!=null&&delaiRTA<0&&!r.dateArchivage) al.push({c:"A2",d:`RTA ${fmtD(r.dateRTA)} dépassée de ${-delaiRTA}j, non archivé`});
     if(on("A3")) inv.forEach(x=>al.push({c:"A3",d:"Inversion : "+x}));
     if(on("A4")&&stagn.some(s=>s.label.startsWith("Validation")||s.label.startsWith("Docs")||s.label.startsWith("Note"))) al.push({c:"A4",d:stagn.filter(s=>/Validation|Docs|Note/.test(s.label)).map(s=>`${s.label} : ${s.jours}j`).join(" • ")});
@@ -317,6 +321,7 @@ function matchGlobal(r, comOv, metOv, monthOv, yearOv, critOv){
   if(c&&r.com!==c) return false;
   if(m&&r.metier!==m) return false;
   if(F.clients.length&&!F.clients.includes(String(r.client||"").trim())) return false;
+  if(F.hideArchived&&r.dateArchivage) return false;
   if(mo&&r.etaYM!==mo) return false;
   if(y&&r.etaYear!==y) return false;
   if(cr&&r.crit!==cr) return false;
@@ -343,7 +348,7 @@ function setF(key,val){
   renderAll();
 }
 function clearAllFilters(){
-  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[]; F.clients=[]; S.clientQ="";
+  F.com=F.metier=F.crit=F.month=F.year=F.rtaMonth=F.rtaYear=F.dFrom=F.dTo=""; F.alertTypes=[]; F.clients=[]; S.clientQ=""; F.hideArchived=false; const ha=$("#gHideArchived"); if(ha) ha.checked=false; savePrefs();
   S.pilMonth=""; setSelect($("#pilMonth"),"");
   ["gCom","gMetier","gCrit","gMonth","gYear","fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fStep","fEta1","fEta2","fSearch","fMonth","fYear","alertSearch","alertCom","alertMetier","alertMonth","alertYear","pCom","pMetier","pCrit","pMonth","pYear","pRtaMonth","pRtaYear","pFrom","pTo"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   S.alertFilter=null; S.sevFilter=""; S.pageMain=0; S.pageAlert=0;
@@ -416,7 +421,7 @@ function commentBubbles(r, query){
 }
 /* Positionnement des dates : chaque date jalons située vs jour J (pilotage) */
 const DSHORT={ETA:"ETA",RTA:"RTA",validation:"Valid.",docs:"Docs",note:"Note",douane:"Enreg.",factDouane:"Fact.",bae:"BAE",mise:"Mise",retour:"Retour",factInt:"FactInt",validFinal:"ValidFin",archivage:"Archiv."};
-const DLONG={ETA:"ETA (arrivée prévue)",RTA:"RTA",validation:"Validation",docs:"Documents complets",note:"Note de détail",douane:"Enreg. douane",factDouane:"Facture douane",bae:"BAE",mise:"Mise en livraison",retour:"Retour livraison",factInt:"Facture intervention",validFinal:"Validation finale",archivage:"Archivage"};
+const DLONG={ETA:"ETA (arrivée estimée)",RTA:"RTA (arrivée réelle)",validation:"Validation",docs:"Documents complets",note:"Note de détail",douane:"Enreg. douane",factDouane:"Facture douane",bae:"BAE",mise:"Mise en livraison",retour:"Retour livraison",factInt:"Facture intervention",validFinal:"Validation finale",archivage:"Archivage"};
 function datePositionHTML(r){
   const P=todayPilot();
   const pts=[["ETA",r.dateETA],["RTA",r.dateRTA],...STEPS.map(s=>[s.k,r[s.dateKey]])];
@@ -577,7 +582,7 @@ function renderDelays(){
   const E=baseFiltered();
   const buckets=[["≤ -15j",r=>r.delaiETA!=null&&r.delaiETA<=-15],["-14 à -8j",r=>r.delaiETA!=null&&r.delaiETA>=-14&&r.delaiETA<=-8],["-7 à -1j",r=>r.delaiETA!=null&&r.delaiETA>=-7&&r.delaiETA<0],["0 à +3j",r=>r.delaiETA!=null&&r.delaiETA>=0&&r.delaiETA<=3],["> +3j",r=>r.delaiETA!=null&&r.delaiETA>3],["Sans ETA",r=>r.delaiETA==null]];
   const max=Math.max(1,...buckets.map(([,f])=>E.filter(f).length));
-  $("#delayDist").innerHTML=buckets.map(([l,f])=>{const n=E.filter(f).length;return `<div class="bar-row"><span>Délai ETA ${l}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:${l.startsWith("≤")||l.startsWith("-")?"#d92d20":l.startsWith("0")?"#e9730c":"#12805c"}"></div></div><b>${n}</b></div>`;}).join("")+`<div class="footer-note">Délai = ETA − date pilotage. Négatif = déjà arrivé. Même logique RTA. Filtrez par délai dans l'onglet Dossiers.</div>`;
+  $("#delayDist").innerHTML=buckets.map(([l,f])=>{const n=E.filter(f).length;return `<div class="bar-row"><span>Délai ETA ${l}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:${l.startsWith("≤")||l.startsWith("-")?"#d92d20":l.startsWith("0")?"#e9730c":"#12805c"}"></div></div><b>${n}</b></div>`;}).join("")+`<div class="footer-note">ETA − jour de pilotage : une valeur négative indique une prévision échue. Seule la RTA confirme l’arrivée réelle.</div>`;
 }
 function renderTopAlerts(){
   const list=filteredAlerts().slice(0,6);
@@ -601,7 +606,7 @@ function renderMain(){
   const slice=rows.slice(S.pageMain*S.perPage,(S.pageMain+1)*S.perPage);
   $("#dossierCount").textContent=rows.length.toLocaleString("fr-FR")+" dossier(s)";
   $("#mainPagerInfo").textContent=`Page ${S.pageMain+1}/${pages}`;
-  $("#mainTable tbody").innerHTML=slice.map(r=>`<tr class="${r.crit==="Critique"?"crit":""}" data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td>${pill(r.crit)}<br><small style="color:#64748b">${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b><button class="star ${S.pins[r._i]?"on":""}" data-star="${r._i}" title="Épingler / désépingler">★</button><br><small style="color:#64748b">${esc(r.designation||"")}</small></td><td>${esc(r.com||"—")}<br><small style="color:#64748b">${esc(r.auteur||"")}</small></td><td>${esc((r.client||"").slice(0,26))}<br><small style="color:#64748b">${esc(r.sousCompte||"")}</small></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${delayCell(r.delaiRTA,r.dateRTA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td style="font-size:11.5px;color:#334155">V:${fmtD(r.dateValidation)}<br>D:${fmtD(r.dateDocs)} • N:${fmtD(r.dateNote)}<br>E:${fmtD(r.dateEnreg)} • B:${fmtD(r.dateBAE)}</td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}${r.alerts.length>3?` <small>+${r.alerts.length-3}</small>`:""}</td></tr>`).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucun dossier avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » via 📤 Charger Excel ou glisser-déposer.</div></td></tr>');
+  $("#mainTable tbody").innerHTML=slice.map(r=>`<tr class="${r.crit==="Critique"?"crit":""}" data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td>${pill(r.crit)}<br><small style="color:#64748b">${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b>${S.prefs.commentBadge&&r.comments?' <span class="cmt-dot" title="Commentaires disponibles — survolez pour les lire">💬</span>':""}<button class="star ${S.pins[r._i]?"on":""}" data-star="${r._i}" title="Épingler / désépingler">★</button><br><small style="color:#64748b">${esc(r.designation||"")}</small></td><td>${esc(r.com||"—")}<br><small style="color:#64748b">${esc(r.auteur||"")}</small></td><td>${esc((r.client||"").slice(0,26))}<br><small style="color:#64748b">${esc(r.sousCompte||"")}</small></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${delayCell(r.delaiRTA,r.dateRTA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td style="font-size:11.5px;color:#334155">V:${fmtD(r.dateValidation)}<br>D:${fmtD(r.dateDocs)} • N:${fmtD(r.dateNote)}<br>E:${fmtD(r.dateEnreg)} • B:${fmtD(r.dateBAE)}</td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}${r.alerts.length>3?` <small>+${r.alerts.length-3}</small>`:""}</td></tr>`).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucun dossier avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » via 📤 Charger Excel ou glisser-déposer.</div></td></tr>');
   $$("#mainTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function renderAlertTable(){
@@ -615,7 +620,7 @@ function renderAlertTable(){
 function perfStats(rows){
   const by={};
   rows.forEach(r=>{const k=r.com||"(vide)";(by[k]=by[k]||{n:0,sc:0,crit:0,eta:[],bae:0,arch:0});const o=by[k];o.n++;o.sc+=r.score;o.crit+=(r.crit==="Critique"||r.crit==="Haute")?1:0;if(r.delaiETA!=null)o.eta.push(r.delaiETA);if(r.dateBAE)o.bae++;if(r.dateArchivage)o.arch++;});
-  return Object.entries(by).map(([k,v])=>({...v,k,avg:v.sc/v.n,rate:v.crit/v.n,med:v.eta.length?[...v.eta].sort((a,b)=>a-b)[Math.floor(v.eta.length/2)]:null,tBae:v.bae/v.n,tArch:v.arch/v.n})).sort((a,b)=>b.avg-a.avg);
+  return Object.entries(by).map(([k,v])=>({...v,k,avg:v.sc/v.n,rate:v.crit/v.n,med:durationStats(v.eta)?.median??null,tBae:v.bae/v.n,tArch:v.arch/v.n})).sort((a,b)=>b.avg-a.avg);
 }
 function verdictPill(avg){
   return avg>=CFG.thCrit?'<span class="pill crit">🔴 En difficulté</span>':avg>=CFG.thHaute?'<span class="pill haute">🟠 À surveiller</span>':'<span class="pill ok">🟢 Fluide</span>';
@@ -629,7 +634,7 @@ function renderPerfs(){
   $$("#perfTable tbody tr[data-com]").forEach(tr=>{
     const com=tr.dataset.com;
     tr.querySelector('[data-act="see"]').onclick=e=>{ e.stopPropagation(); setF("com",com); goto("dossiers"); };
-    tr.querySelector('[data-act="csv"]').onclick=e=>{ e.stopPropagation(); download(`spot_situation_${com}.csv`,toCSVParts(S.enriched.filter(r=>r.com===com)),"text/csv"); toast(`⬇ Situation <b>${esc(com)}</b> exportée en intégralité (CSV)`); };
+    tr.querySelector('[data-act="csv"]').onclick=e=>{ e.stopPropagation(); download(`spot_situation_${com}.csv`,toCSVParts(baseFiltered().filter(r=>r.com===com)),"text/csv"); toast(`⬇ Situation <b>${esc(com)}</b> exportée en intégralité (CSV)`); };
     tr.querySelector('[data-act="mail"]').onclick=e=>{ e.stopPropagation(); openMailModal(com); };
     tr.onclick=e=>{ if(e.target.closest("button")) return; S.selCom=com; renderPerfs(); };
   });
@@ -646,7 +651,7 @@ function renderComDetail(){
   renderComStatus(rows);
   const n=rows.length||1;
   const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length, moy=rows.filter(r=>r.crit==="Moyenne").length, ok=rows.filter(r=>r.crit==="OK").length;
-  const etaMed=(()=>{const v=rows.map(r=>r.delaiETA).filter(v=>v!=null).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length/2)]:null;})();
+  const etaMed=durationStats(rows.map(r=>r.delaiETA).filter(v=>v!=null))?.median??null;
   const kpis=[
     {l:"Dossiers",v:rows.length,s:`100% du périmètre filtré`,c:"#0f2a52"},
     {l:"Critiques",v:crit,s:`${Math.round(crit/n*100)}%`,c:sevColor("Critique")},
@@ -671,7 +676,7 @@ function renderComDetail(){
   const pairs=[]; for(let i=0;i<STEPS.length-1;i++) pairs.push([STEPS[i],STEPS[i+1]]);
   const avgs=pairs.map(([a,b])=>{
     let s=0,n=0; rows.forEach(r=>{ const d1=r[a.dateKey],d2=r[b.dateKey]; if(d1&&d2){ const d=diffJ(d2,d1); if(d!=null&&d>=0){s+=d;n++;} } });
-    return {l:`${a.label} → ${b.label}`, avg:n?s/n:null, n, sla:CFG.sla[b.k]??null};
+    return {l:`${a.label} → ${b.label}`, avg:n?s/n:null, n, sla:CFG.sla[a.k]??null};
   });
   const mxS=Math.max(1,...avgs.map(x=>x.avg||0));
   st.innerHTML=avgs.map(x=>x.avg==null
@@ -723,6 +728,93 @@ function renderAlertMulti(){
   btn.title=sel.length?`Types visibles : ${sel.join(", ")} — cliquez pour modifier`:"Choisir les types d'alerte visibles sur toutes les pages";
   panel.innerHTML=Object.entries(CFG.alerts).filter(([,d])=>d.on!==false&&!d.deleted).map(([k,d])=>`<label class="msel-opt" title="${esc(d.h)}"><input type="checkbox" data-at="${k}" ${sel.includes(k)?"checked":""}><span class="dot" style="background:${d.c}"></span><b>${k}</b><span style="flex:1">${esc(d.t)}</span></label>`).join("")+`<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" id="msAll">Tous</button><button class="btn small ghost" id="msInv">Inverser</button></div>`;
 }
+/* ---------- Temps de traitement par séquence + évolution mensuelle ---------- */
+/* ETA is a forecast, RTA an observed arrival. Preparation may precede either.
+   Only consecutive processing milestones form processing-time sequences. */
+function processSeq(){ return STEPS.map(s=>[s.label,s.dateKey]); }
+function durationStats(values){
+  if(!values.length) return null;
+  const ds=[...values].sort((a,b)=>a-b),n=ds.length;
+  return {n,sum:ds.reduce((s,d)=>s+d,0),mean:ds.reduce((s,d)=>s+d,0)/n,median:n%2?ds[Math.floor(n/2)]:(ds[n/2-1]+ds[n/2])/2,min:ds[0],max:ds[n-1]};
+}
+function stepStats(rows){
+  const seq=processSeq(), out=[],pilot=todayPilot();
+  for(let i=0;i<seq.length-1;i++){
+    const [la,ka]=seq[i],[lb,kb]=seq[i+1];
+    const ds=[],waiting=[];let inversions=0;
+    rows.forEach(r=>{const a=r[ka],b=r[kb];if(!a)return;if(b){const d=diffJ(b,a);if(d>=0)ds.push(d);else inversions++;}else if(!r.dateArchivage&&!seq.slice(i+2).some(([,key])=>r[key])){const age=diffJ(pilot,a);if(age>=0)waiting.push(age);}});
+    if(!ds.length&&!waiting.length&&!inversions) continue;
+    const stats=durationStats(ds),age=durationStats(waiting);
+    const buckets=[["0–2 j",d=>d<=2],["3–7 j",d=>d>2&&d<=7],["8–14 j",d=>d>7&&d<=14],[">14 j",d=>d>14]].map(([label,test])=>({label,n:ds.filter(test).length,pct:ds.length?ds.filter(test).length/ds.length*100:0}));
+    out.push({from:la,to:lb,n:ds.length,mean:stats?.mean??null,median:stats?.median??null,min:stats?.min??null,max:stats?.max??null,sum:stats?.sum??0,waiting:waiting.length,age:age?.median??null,inversions,buckets});
+  }
+  const tot=out.reduce((s,p)=>s+p.sum,0)||1;
+  out.forEach(p=>p.pct=p.sum/tot*100);
+  return out;
+}
+function monthStats(rows){
+  const by={};
+  rows.forEach(r=>{
+    const k=r.etaYM||"(sans ETA)";
+    const o=by[k]=by[k]||{n:0,crit:0,haute:0,moy:0,ok:0,arch:0,sc:0};
+    o.n++; o.sc+=r.score;
+    o[r.crit==="Critique"?"crit":r.crit==="Haute"?"haute":r.crit==="Moyenne"?"moy":"ok"]++;
+    if(r.dateArchivage) o.arch++;
+  });
+  return Object.entries(by).sort((a,b)=>a[0]==="(sans ETA)"?1:b[0]==="(sans ETA)"?-1:a[0].localeCompare(b[0]));
+}
+function etaRtaStats(rows){
+  const ds=[];
+  rows.forEach(r=>{ if(!r.dateETA||!r.dateRTA) return; const d=diffJ(r.dateRTA,r.dateETA); if(d!=null) ds.push(d); });
+  if(!ds.length) return null;
+  ds.sort((a,b)=>a-b);
+  return {...durationStats(ds),late:ds.filter(d=>d>0).length,early:ds.filter(d=>d<0).length};
+}
+function cycleStats(rows){
+  const ds=[];rows.forEach(r=>{if(r.dateValidation&&r.dateArchivage){const d=diffJ(r.dateArchivage,r.dateValidation);if(d>=0)ds.push(d);}});return durationStats(ds);
+}
+function monthlyHistory(rows){
+  const by={},ym=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`,pilot=todayPilot();
+  const bucket=k=>by[k]||(by[k]={opened:0,arrived:0,delivered:0,archived:0,states:Array(STEPS.length).fill(0)});
+  rows.forEach(r=>{
+    for(const [key,target] of [["dateValidation","opened"],["dateRTA","arrived"],["dateRetour","delivered"],["dateArchivage","archived"]])if(r[key]&&r[key]<=pilot)bucket(ym(r[key]))[target]++;
+    const events=STEPS.map((s,i)=>({date:r[s.dateKey],i})).filter(e=>e.date&&e.date<=pilot).sort((a,b)=>a.date-b.date||a.i-b.i);
+    if(!events.length)return;
+    const snapshots=new Map();events.forEach(e=>snapshots.set(ym(e.date),e.i));
+    const first=events[0].date,end=events[events.length-1].i===STEPS.length-1?events[events.length-1].date:pilot;
+    let latest=-1;
+    for(let date=new Date(first.getFullYear(),first.getMonth(),1);date<=end;date=new Date(date.getFullYear(),date.getMonth()+1,1)){
+      const key=ym(date);if(snapshots.has(key))latest=snapshots.get(key);
+      if(latest>=0)bucket(key).states[latest]++;
+    }
+  });
+  return Object.entries(by).sort((a,b)=>a[0].localeCompare(b[0]));
+}
+function renderEvolution(){
+  const card=$("#evoCard"); if(!card) return;
+  const rows=baseFiltered();
+  const pairs=stepStats(rows), ms=monthStats(rows), es=etaRtaStats(rows),cycle=cycleStats(rows);
+  const slow=pairs.filter(p=>p.n).sort((a,b)=>b.mean-a.mean)[0];
+  const topMonth=[...ms].sort((a,b)=>b[1].n-a[1].n)[0];
+  const kpis=[
+    {l:"RTA vs ETA (médian)",v:es?es.median+"j":"—",s:es?`${es.early} arrivées en avance • ${es.late} en retard`:"pas de couple ETA/RTA",c:es?(es.median>0?"#d92d20":"#12805c"):"#64748b"},
+    {l:"Cycle clôturé moyen",v:cycle?cycle.mean.toFixed(1)+"j":"—",s:cycle?`Validation → archivage · ${cycle.n} dossiers · médiane ${cycle.median}j` :"Aucun cycle complet renseigné",c:"#0f2a52"},
+    {l:"Séquence la plus lente",v:slow?slow.mean.toFixed(1)+"j":"—",s:slow?`${slow.from} → ${slow.to} (n=${slow.n})`:"—",c:"#e9730c"},
+    {l:"Mois le plus chargé",v:topMonth?(topMonth[0]==="(sans ETA)"?"Sans ETA":ymLabel(topMonth[0])):"—",s:topMonth?`${topMonth[1].n} dossiers • ${Math.round(topMonth[1].arch/topMonth[1].n*100)}% archivés`:"—",c:"#2563eb"},
+  ];
+  $("#evoKpis").innerHTML=kpis.map(k=>`<div class="kpi" style="--kpi-c:${k.c}"><label>${k.l}</label><strong>${k.v}</strong><span>${esc(k.s)}</span></div>`).join("");
+  // évolution mensuelle : dossiers et leur état
+  const mxM=Math.max(1,...ms.map(x=>x[1].n));
+  $("#evoMonths tbody").innerHTML=ms.map(([k,o])=>{
+    const ch=o.crit+o.haute;
+    return `<tr><td><b>${k==="(sans ETA)"?"Sans ETA":esc(ymLabel(k))}</b></td><td>${o.n}</td><td><div class="stack" title="Critique ${o.crit} • Haute ${o.haute} • Moyenne ${o.moy} • OK ${o.ok}">${[["crit",sevColor("Critique")],["haute",sevColor("Haute")],["moy",sevColor("Moyenne")],["ok",sevColor("OK")]].map(([g,c])=>o[g]?`<i style="width:${Math.max(1.5,o[g]/o.n*100)}%;background:${c}"></i>`:"").join("")}</div></td><td>${Math.round(ch/o.n*100)}%</td><td>${(o.sc/o.n).toFixed(1)}</td><td>${Math.round(o.arch/o.n*100)}%</td></tr>`;
+  }).join("")||'<tr><td colspan="6"><div class="empty-state"><b>Aucune donnée</b>Chargez votre export Excel.</div></td></tr>';
+  $$("#evoMonths tbody tr").forEach(tr=>tr.onclick=()=>{const title=tr.querySelector("td b");if(!title)return;const ym=uniqYM().find(y=>ymLabel(y)===title.textContent);if(ym)setF("month",ym);});
+  // horloge des temps de traitement : moyenne, médiane, min, max, part du cycle
+  const mxS=Math.max(1,...pairs.map(p=>p.mean||0));
+  $("#evoSteps tbody").innerHTML=pairs.map(p=>`<tr><td><b>${esc(p.from)} → ${esc(p.to)}</b><br><small>${p.n} séquences terminées · ${p.waiting} en attente${p.age!==null?` (âge médian ${p.age}j)`:""} · ${p.inversions} inversions exclues</small></td><td><b>${p.mean!==null?p.mean.toFixed(1)+"j":"—"}</b></td><td>${p.median!==null?p.median+"j":"—"}</td><td>${p.min!==null?p.min+"j":"—"}</td><td>${p.max!==null?p.max+"j":"—"}</td><td><div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.mean||0)/mxS*100)}%;background:#2563eb"></div></div><small>${p.pct.toFixed(1)}% des jours observés</small></td><td>${p.buckets.map(b=>`${b.label} : ${b.pct.toFixed(0)}%`).join("<br>")}</td></tr>`).join("")||'<tr><td colspan="7"><div class="empty-state"><b>Pas assez de dates renseignées</b></div></td></tr>';
+  $("#evoHistory tbody").innerHTML=monthlyHistory(rows).map(([key,o])=>`<tr><td><b>${esc(ymLabel(key))}</b></td><td>${o.opened}</td><td>${o.arrived}</td><td>${o.delivered}</td><td>${o.archived}</td><td>${o.states.slice(0,-1).reduce((s,n)=>s+n,0)}</td><td>${o.states.map((n,i)=>n?`${esc(STEPS[i].label)} : ${n}`:"").filter(Boolean).join("<br>")||"—"}</td></tr>`).join("")||'<tr><td colspan="7">Aucun historique daté disponible.</td></tr>';
+}
 function renderBU(){
   const E=baseFiltered();
   const byM={}; E.forEach(r=>{const k=r.metier||"(vide)";byM[k]=(byM[k]||0)+1;});
@@ -739,8 +831,8 @@ function renderBU(){
 function renderMethodo(){
   $("#methodoBody").innerHTML=`
   <h4>1. Chaîne process & ordre attendu</h4>
-  <p><code>Validation → Docs complets → Note détail → Enreg. douane → Facture douane → BAE → Mise livraison → Retour → Facture intervention → Validation finale → Archivage</code>, avec <code>ETA / RTA</code> en amont. Tout non-respect = <b>A3 inversion</b> (+${CFG.alerts.A3.w} pts).</p>
-  <h4>2. Délais ETA / RTA (date pilotage = ${esc($("#pilotDate").value||CFG.pilot)})</h4><p><code>Délai = Date − Date pilotage</code>. Recalculé en local. <b>Négatif = déjà arrivé.</b> Seuils : <code>&lt; 0 alerte</code>, <code>&lt; ${CFG.etaCrit} ETA critique</code>, <code>&lt; ${CFG.rtaCrit} RTA critique</code> (réglables dans Administration).</p>
+  <p><code>Validation → Docs → Note → Douane → Facture douane → BAE → Mise → Retour → Facture intervention → Validation finale → Archivage</code>. La préparation peut précéder l'arrivée réelle. A3 vérifie uniquement l'ordre des jalons du process, sans imposer RTA avant validation.</p>
+  <h4>2. ETA estimative / RTA réelle (pilotage = ${esc($("#pilotDate").value||CFG.pilot)})</h4><p>Une ETA passée indique une prévision échue, pas une arrivée confirmée. La RTA est l'arrivée réelle. <code>RTA − ETA</code> mesure l'avance (négatif) ou le retard (positif) d'arrivée. Les temps de traitement se calculent séparément entre jalons réellement renseignés.</p>
   <h4>3. SLA par transition (jours, réglables)</h4>
   <p>${Object.entries(CFG.sla).map(([k,v])=>`${k} <b>${v}j</b>`).join(" • ")}. Dépassement = stagnation, alertes A4/A5/A7/A8.</p>
   <h4>4. Alertes actives (poids et sévérités réglables)</h4>
@@ -749,7 +841,13 @@ function renderMethodo(){
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
-function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderAlertMulti(); renderClientMulti(); renderPins(); renderClientDetail();if(S.drawerId!==undefined&&$("#drawer").classList.contains("open"))openDrawer(S.drawerId); }
+function renderAll(){ renderPilotage(); renderKPIs(); renderComBars(); renderSteps(); renderDelays(); renderTopAlerts(); renderAlertTypes(); renderAlertTable(); renderMain(); renderPerfs(); renderBU(); renderEvolution(); renderAlertMulti(); renderClientMulti(); renderPins(); renderClientDetail();if(S.drawerId!==undefined&&$("#drawer").classList.contains("open"))openDrawer(S.drawerId);renderCommentBadges(); }
+function renderCommentBadges(){
+  $$("tr[data-i] .cmt-dot").forEach(el=>el.remove());
+  if(!S.prefs.commentBadge)return;
+  const lookup=new Map(S.enriched.map(r=>[r._i,r]));
+  $$("tr[data-i]").forEach(tr=>{const r=lookup.get(+tr.dataset.i);if(!r||!(r.comments||S.notes[r._i]))return;const label=[...tr.querySelectorAll("td b")].find(el=>el.textContent===(r.dossier||"—"));if(label){const badge=document.createElement("span");badge.className="cmt-dot";badge.textContent="💬";badge.title="Commentaires disponibles — survolez pour les lire";label.after(badge);}});
+}
 /* ---------- Administration ---------- */
 function renderAdmin(){
   renderRuleManager();
@@ -795,7 +893,7 @@ function renderClientDetail(){
   const rows=baseFiltered().filter(r=>r.client===client);
   const n=rows.length||1;
   const crit=rows.filter(r=>r.crit==="Critique").length, haute=rows.filter(r=>r.crit==="Haute").length;
-  const etaMed=(()=>{const v=rows.map(r=>r.delaiETA).filter(v=>v!=null).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length/2)]:null;})();
+  const etaMed=durationStats(rows.map(r=>r.delaiETA).filter(v=>v!=null))?.median??null;
   const bae=rows.filter(r=>r.dateBAE).length, arch=rows.filter(r=>r.dateArchivage).length;
   const kpis=[
     {l:"Dossiers",v:rows.length,s:"périmètre filtré",c:"#0f2a52"},
@@ -901,6 +999,7 @@ function renderGuide(){
 /* ---------- Drawer ---------- */
 function openDrawer(i){
   const source=S.enriched.find(x=>x._i===i); if(!source) return;
+  if(F.hideArchived&&source.dateArchivage){$("#drawer").classList.remove("open");return;}
   const r={...source,alerts:visibleAlerts(source)}; S.drawerId=i;
   $("#dPin").textContent=S.pins[i]?"★ Épinglé":"☆ Épingler";
   $("#dCrit").innerHTML=`${pill(r.crit)} <span class="pill info">score ${r.score}</span> <span class="pill grey">${esc(r.etape)}</span>`;
@@ -927,7 +1026,7 @@ function openDrawer(i){
     <div class="footer-note">💡 Mots-clés surlignés : RFCV, BL, BAE, ETA/RTA, DOUANE, FACTURE, LIVRAISON… Vides signalés pour relance de saisie.</div>
     <h4 style="margin:12px 0 4px">🛤 Timeline process + délais calculés</h4>
     <div class="timeline">
-      ${stepRow("ETA (arrivée prévue)",r.dateETA)}${stepRow("RTA",r.dateRTA)}
+      ${stepRow("ETA (arrivée estimée)",r.dateETA)}${stepRow("RTA (arrivée réelle)",r.dateRTA)}
       ${STEPS.map(s=>stepRow(s.label,r[s.dateKey])).join("")}
     </div>
     <div style="display:flex;gap:8px;margin-top:12px"><button class="btn small" id="dCom">Filtrer ce COM</button><button class="btn small" id="dDos">Copier n° dossier</button></div>`;
@@ -978,6 +1077,7 @@ function cadreRows(){
   const from=excelToDate($("#cadreFrom").value), to=excelToDate($("#cadreTo").value);
   const ym=$("#cadreMonth").value, yr=$("#cadreYear").value;
   return S.enriched.filter(r=>{
+    if(F.hideArchived&&r.dateArchivage) return false;
     if(coms.length&&!coms.includes(String(r.com||"").trim())) return false;
     if(met&&r.metier!==met) return false;
     if(crit&&r.crit!==crit) return false;
@@ -1032,7 +1132,7 @@ function goto(v){
   setSelect($("#mobileNav"),v);
   $$(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   $$(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+v));
-  $("#viewTitle").textContent={overview:"Vue d'ensemble",pilotage:"Pilotage du mois — dossiers du mois",alertes:"Alertes",dossiers:"Dossiers",epingles:"Dossiers épinglés",perfs:"Performance COM",bu:"Vision BU / Section",admin:"Administration",guide:"Guide d'usage",methodo:"Méthodologie"}[v]||v;
+  $("#viewTitle").textContent={overview:"Vue d'ensemble",pilotage:"Pilotage du mois — dossiers du mois",alertes:"Alertes",dossiers:"Dossiers",epingles:"Dossiers épinglés",evolution:"Évolution mensuelle",perfs:"Performance COM",bu:"Vision BU / Section",admin:"Administration",guide:"Guide d'usage",methodo:"Méthodologie"}[v]||v;
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -1124,7 +1224,7 @@ function exportXLSX(name, rows){
 let MAIL_COM="";
 function buildComReport(com){
   const P=todayPilot();
-  const rows=S.enriched.filter(r=>r.com===com);
+  const rows=baseFiltered().filter(r=>r.com===com);
   const crit=rows.filter(r=>r.crit==="Critique"), haute=rows.filter(r=>r.crit==="Haute");
   const etaLate=rows.filter(r=>r.delaiETA!=null&&r.delaiETA<0&&!r.dateBAE);
   const top=[...rows].sort((a,b)=>b.score-a.score).slice(0,8);
@@ -1185,7 +1285,7 @@ async function init(){
   const selectCom=com=>{S.selCom=com;renderPerfs();$("#comDetailName").scrollIntoView({behavior:"smooth",block:"center"});};
   $("#comPicker").onchange=e=>selectCom(e.target.value);
   $("#comTiles").onclick=e=>{const tile=e.target.closest("[data-com-tile]");if(tile)selectCom(tile.dataset.comTile);};
-  loadLocal();
+  loadLocal(); loadPrefs();
   // épinglés
   $("#mainTable").addEventListener("click",e=>{ const st=e.target.closest("[data-star]"); if(st){ e.stopPropagation(); togglePin(+st.dataset.star); } },true);
   $("#pinTable").addEventListener("click",e=>{
@@ -1221,7 +1321,7 @@ async function init(){
   // mail modal
   $("#mailClose").onclick=()=>$("#mailBack").classList.remove("open");
   $("#mailCopy").onclick=()=>{ navigator.clipboard?.writeText($("#mailBody").value); toast("📋 Corps de l'e-mail copié"); };
-  $("#mailCsv").onclick=()=>{ download(`spot_situation_${MAIL_COM}.csv`,toCSVParts(S.enriched.filter(r=>r.com===MAIL_COM)),"text/csv"); };
+  $("#mailCsv").onclick=()=>{ download(`spot_situation_${MAIL_COM}.csv`,toCSVParts(baseFiltered().filter(r=>r.com===MAIL_COM)),"text/csv"); };
   $("#mailOpen").onclick=()=>{ const to=$("#mailTo").value.trim(), su=$("#mailSubject").value, bo=$("#mailBody").value; window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(bo)}`; toast("📧 Messagerie ouverte — joignez le CSV du COM"); };
   ["fCom","fMetier","fSous","fClient","fSousCpte","fCrit","fDelay","fEta1","fEta2","fStep","fMonth","fYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{
     if(["fCom","fMetier","fCrit","fMonth","fYear"].includes(id)){ setF({fCom:"com",fMetier:"metier",fCrit:"crit",fMonth:"month",fYear:"year"}[id],el.value); return; }
@@ -1229,6 +1329,8 @@ async function init(){
   });});
   ["gCom","gMetier","gCrit","gMonth","gYear"].forEach(id=>{const el=document.getElementById(id); if(el) el.addEventListener("change",()=>{ const k={gCom:"com",gMetier:"metier",gCrit:"crit",gMonth:"month",gYear:"year"}[id]; setF(k,el.value); });});
   $("#gClear").onclick=()=>{ clearAllFilters(); toast("Filtres réinitialisés"); };
+  $("#gHideArchived").onchange=e=>{ F.hideArchived=e.target.checked; savePrefs(); S.pageMain=0; S.pageAlert=0; renderAll(); toast(F.hideArchived?"📦 Dossiers archivés masqués (toutes les vues)":"📦 Dossiers archivés affichés"); };
+  $("#gCommentBadge").onchange=e=>{ S.prefs.commentBadge=e.target.checked; savePrefs(); renderCommentBadges(); toast(S.prefs.commentBadge?"💬 Pastille commentaires activée":"💬 Pastille commentaires désactivée"); };
   // multi-sélecteur types d'alerte (toutes pages)
   $("#gAlertBtn").onclick=e=>{ e.stopPropagation(); $("#gAlertPanel").classList.toggle("open"); };
   document.addEventListener("click",e=>{ const w=$("#gAlertWrap"); if(w&&!w.contains(e.target)) $("#gAlertPanel").classList.remove("open"); const wc=$("#gClientWrap"); if(wc&&!wc.contains(e.target)) $("#gClientPanel").classList.remove("open"); });

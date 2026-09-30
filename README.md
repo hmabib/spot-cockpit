@@ -81,6 +81,15 @@ vercel --prod
 
 ## 7. Fichiers
 
+### Évolution et temps de traitement (v14)
+
+- **Archivés masqués** : toggle permanent, appliqué aux vues métier, aux rapports et aux exports filtrés. Préférence mémorisée ; « Effacer » remet les archivés dans le périmètre.
+- **Pastille 💬** : repère les dossiers commentés dans les tableaux ; toggle d’affichage mémorisé. Les commentaires restent lisibles dans la fiche et au survol.
+- **Évolution** : ouvertures, arrivées réelles (RTA), livraisons et archivages par mois ; états en fin de mois reconstitués uniquement depuis les jalons datés. L’état actuel par cohorte ETA est présenté séparément.
+- **Temps de traitement** : moyenne, médiane exacte, min/max, effectif des séquences terminées, attentes en cours et âge médian, inversions exclues. Répartition 0–2 / 3–7 / 8–14 / >14 jours et part des jours cumulés observés par séquence.
+- Le cycle total est mesuré **Validation → Archivage sur les dossiers avec les deux dates**, sans additionner les moyennes de cohortes différentes. **ETA est prévisionnelle ; RTA est réelle**. Leur écart inclut les arrivées en avance et n’entre pas dans le cycle documentaire. Préparer un dossier avant la RTA n’est pas une inversion.
+- Vérification : `node tests/evolution.test.cjs`.
+
 ### Gros volumes (v13)
 
 - **Aucune limite de lignes** : testé et validé sur un export **150 000 lignes / 44 Mo** — chargement intégral (~80 s : lecture, mapping, analyse), progression visible à chaque étape, interface qui reste réactive (traitement par blocs), pagination fluide.

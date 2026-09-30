@@ -305,3 +305,18 @@ button.alert-type{font-family:inherit;text-align:left;background:#fff;width:100%
 @media(max-width:900px){.com-status-board{grid-template-columns:repeat(3,1fr)}.condition-row{grid-template-columns:1fr 1fr}.rule-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.mobile-nav{display:block}#comDetailKpis,#perfKpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:550px){.com-status-board{grid-template-columns:repeat(2,1fr)}.section-heading h3{font-size:21px}.modal .filters{grid-template-columns:1fr!important}.section-heading .f-field{width:100%}}
+
+/* Toggles barre globale */
+.switch{position:relative;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#334155;cursor:pointer;user-select:none;white-space:nowrap}
+.switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
+.switch i{width:34px;height:19px;border-radius:999px;background:#cbd5e1;position:relative;transition:.2s;flex:none}
+.switch i::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:2px;left:2px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch input:checked+i{background:#12805c}
+.switch input:checked+i::after{left:17px}
+.switch:focus-within{outline:3px solid #93c5fd;outline-offset:3px;border-radius:8px}
+/* Pastille commentaire */
+.cmt-dot{font-size:11px;vertical-align:2px;margin-left:2px}
+/* Répartition empilée (évolution mensuelle) */
+.stack{display:flex;height:10px;border-radius:999px;overflow:hidden;background:#eef2f7;width:100%}
+.stack i{display:block;height:100%}
+@media(max-width:700px){#evoKpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
