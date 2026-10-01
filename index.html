@@ -153,7 +153,7 @@
 
     <!-- OVERDUE / HINTERLAND -->
     <section class="view" id="view-overdue">
-      <div class="card"><div class="card-h"><h3>🚨 Overdue Files Hinterland — 9 points de contrôle</h3><span class="hint">9 catégories • périmètre configurable • pilotage du <span id="ovPilot">—</span></span><span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn small" id="ovExport">⬇ CSV Overdue</button><button class="btn small" id="ovExportX">⬇ XLSX</button></span></div>
+      <div class="card"><div class="card-h"><h3>🚨 Overdue Files Hinterland — 10 points de contrôle</h3><span class="hint">10 catégories (L10 débours : champ requis) • périmètre configurable • pilotage du <span id="ovPilot">—</span></span><span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn small" id="ovExport">⬇ CSV Overdue</button><button class="btn small" id="ovExportX">⬇ XLSX</button></span></div>
       <div class="card-b">
         <p class="footer-note" style="margin:0 0 10px">Chaque point = <b>étape manquante + ancienneté &gt; seuil</b> vs date pilotage, sur le périmètre Hinterland (défaut : sous-métier 20C). Les seuils et le périmètre se règlent dans <b>Administration → Overdue</b>. Tous les écarts sont calculés par le système depuis le fichier chargé.</p>
         <div class="alert-types" id="ovCards"></div>
@@ -176,7 +176,7 @@
       <div class="table-wrap" style="max-height:420px"><table id="ovTable"><thead><tr><th>Cat.</th><th>N° dossier</th><th>COM</th><th>Client</th><th>Étape manquante</th><th>Ancienneté</th><th>ETA</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div>
       <div class="pager"><span id="ovPagerInfo"></span><button class="btn small" id="ovPrev">←</button><button class="btn small" id="ovNext">→</button></div>
       </div>
-      <div class="card" style="margin-top:12px"><div class="card-h"><h3>🧪 Ajustement des seuils — aligner le référentiel</h3><span class="hint">Ajustez puis 💾 dans Administration</span></div><div class="card-b"><div class="table-wrap"><table id="ovCalib"><thead><tr><th>Code</th><th>Règle</th><th>Seuil (j)</th><th>Fichier du jour</th><th id="ovCalibRefTh">Référence</th><th>Écart</th></tr></thead><tbody></tbody></table></div><p class="footer-note">Logique : L1 Enreg+Fact→BAE • L2 Enreg→Fact • L3 BAE→Mise (flux ETA ≤ fenêtre) • L4 Mise→Retour (flux ETA ≤ fenêtre) • L5 Mise→Retour sans FactInt • L6 Enreg→FactInt • L7 BAE→FactInt • L8 BAE→Archivage • L9 Valid→Enreg. Périmètre configurable. Les écarts &gt; 3 dossiers indiquent un seuil ou périmètre à ajuster, ou un blocage à qualifier.</p></div></div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>🧪 Ajustement des seuils — aligner le référentiel</h3><span class="hint">Ajustez puis 💾 dans Administration</span></div><div class="card-b"><div class="table-wrap"><table id="ovCalib"><thead><tr><th>Code</th><th>Règle</th><th>Seuil (j)</th><th>Fichier du jour</th><th id="ovCalibRefTh">Référence</th><th>Écart</th></tr></thead><tbody></tbody></table></div><p class="footer-note">Logique : L1 Enreg+Fact→BAE • L2 Enreg→Fact • L3 BAE→Mise (sans facture) • L4 sans retour ni facture (mise ancienne, ou flux terrestre/amont sans ETA-RTA) • L5 livré non facturé/non archivé, BAE ancien • L6 Enreg+BAE→FactInt • L7 retour effectué ou BAE ancien, sans facture ni archivage • L8 tout non archivé • L9 validé sans enreg, ETA connue • L10 débours : marqueur financier non présent dans l'extraction (montant/solde à intégrer). Périmètre configurable. Les écarts &gt; 3 dossiers indiquent un seuil ou périmètre à ajuster, ou un blocage à qualifier.</p></div></div>
     </section>
 
     <!-- DOSSIERS -->
@@ -272,8 +272,9 @@
         </div>
         <h4>⏱ SLA par transition (jours)</h4>
         <div class="filters" id="cfgSlaGrid" style="grid-template-columns:repeat(5,1fr);margin-top:0"></div>
-        <h4>🚨 Overdue — seuils par catégorie (jours) + périmètre Hinterland</h4>
-        <div class="filters" id="cfgOverdueGrid" style="grid-template-columns:repeat(5,1fr);margin-top:0"></div>
+        <h4>🚨 Overdue — règles, seuils, visibilité + périmètre Hinterland</h4>
+        <div class="table-wrap"><table id="cfgOverdueTable" style="min-width:760px"><thead><tr><th>Code</th><th>Règle</th><th>Active</th><th>Sévérité</th><th>Seuil (j)</th><th>Couleur</th><th></th></tr></thead><tbody></tbody></table></div>
+        <div id="cfgOverdueDeleted" style="margin-top:6px"></div>
         <div class="f-field" style="margin-top:8px;max-width:520px"><label>Périmètre Hinterland (sous-métiers, séparés par virgule — défaut 20C)</label><input id="cfgOverduePerim" placeholder="ex : 20C"></div>
         <details class="detail-section"><summary>Réglages détaillés de toutes les alertes</summary>
         <div class="table-wrap"><table id="cfgAlertTable" style="min-width:760px"><thead><tr><th>Code</th><th>Alerte</th><th>Active</th><th>Sévérité</th><th>Poids</th><th>Seuil (j)</th><th>Couleur</th></tr></thead><tbody></tbody></table></div>

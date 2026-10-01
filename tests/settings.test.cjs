@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 global.window={};
 require('../settings.js');
-const {matches,validate}=window.SpotSettings;
+const {matches,validate,validateOverdue}=window.SpotSettings;
 const defaults={pilot:'2026-09-28',thCrit:55,thHaute:30,thMoy:12,etaCrit:-7,rtaCrit:-7,sla:{docs:2},sevColors:{Haute:'#e9730c'},alerts:{A1:{t:'ETA',sev:'Critique',w:30,days:0,c:'#d92d20',on:true,h:''}}};
 const rule={t:'Retard sans BAE',sev:'Haute',w:15,days:0,c:'#e9730c',on:true,mode:'all',conditions:[{field:'dateETA',op:'olderThan',value:3},{field:'dateBAE',op:'empty',value:''}]};
 const pilot=new Date('2026-09-28T00:00:00');
@@ -25,4 +25,17 @@ assert.throws(()=>validate({...config,alerts:{R1:{...rule,conditions:[{field:'__
 assert.throws(()=>validate({...config,alerts:{R1:{...rule,conditions:[{field:'client',op:'olderThan',value:3}]}}},defaults),/champ date/);
 assert.throws(()=>validate({...config,alerts:{R1:{...rule,c:'red'}}},defaults),/couleur/);
 assert.throws(()=>validate({...config,alerts:{R1:{...rule,conditions:[]}}},defaults),/Conditions/);
-console.log('PASS: conditions ET/OU, dates manquantes, zéro numérique, JSON aller-retour, masquage/suppression, validation des fichiers');
+const ovDef={perim:["20C"],days:{L1:3,L9:380},rules:{L1:{on:true,sev:"Critique",c:"#d92d20",deleted:false},L9:{on:true,sev:"Moyenne",c:"#ca8a04",deleted:false}}};
+assert.deepEqual(validateOverdue(undefined,ovDef),ovDef);
+assert.deepEqual(validateOverdue(null,ovDef),ovDef);
+const ov1=validateOverdue({perim:["20C","30A"],days:{L1:5},rules:{L9:{on:false}}},ovDef);
+assert.deepEqual(ov1.perim,["20C","30A"]);assert.equal(ov1.days.L1,5);assert.equal(ov1.days.L9,380);
+assert.equal(ov1.rules.L9.on,false);assert.equal(ov1.rules.L1.on,true);
+assert.throws(()=>validateOverdue({perim:[]},ovDef),/Périmètre/);
+assert.throws(()=>validateOverdue({days:{LX:3}},ovDef),/inconnu/);
+assert.throws(()=>validateOverdue({days:{L1:"x"}},ovDef),/Valeur invalide/);
+assert.throws(()=>validateOverdue({rules:{LX:{on:true}}},ovDef),/inconnue/);
+assert.throws(()=>validateOverdue({rules:{L1:{sev:"Urgente"}}},ovDef),/Sévérité/);
+assert.throws(()=>validateOverdue({rules:{L1:{c:"red"}}},ovDef),/Couleur/);
+assert.throws(()=>validateOverdue({rules:{L1:{on:"oui"}}},ovDef),/État/);
+console.log('PASS: conditions ET/OU, dates manquantes, zéro numérique, JSON aller-retour, masquage/suppression, validation des fichiers + Overdue (défauts, seuils, visibilité, rejets)');

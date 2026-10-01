@@ -58,5 +58,35 @@
     }
     return copy;
   }
-  window.SpotSettings={fields,operators,matches,validate};
+  /* Réglages Overdue (règles L1-L10 : périmètre, seuils, visibilité). Anciens fichiers sans cette section : valeurs par défaut. */
+  function validateOverdue(raw,defaults){
+    const copy=JSON.parse(JSON.stringify(defaults));
+    if(raw==null) return copy;
+    if(typeof raw!=="object"||Array.isArray(raw)) throw Error("Réglages Overdue invalides");
+    const num=(v,label,min,max)=>{const n=Number(v);if(typeof v!=="number"||!Number.isFinite(n)||n<min||n>max)throw Error("Valeur invalide : "+label);return n;};
+    const color=v=>typeof v==="string"&&/^#[0-9a-f]{6}$/i.test(v);
+    if(raw.perim!==undefined){
+      if(!Array.isArray(raw.perim)||!raw.perim.length||raw.perim.length>20||raw.perim.some(s=>typeof s!=="string"||!s.trim()||s.length>20)) throw Error("Périmètre Overdue invalide");
+      copy.perim=raw.perim.map(s=>s.trim());
+    }
+    if(raw.days!==undefined){
+      if(!raw.days||typeof raw.days!=="object"||Array.isArray(raw.days)) throw Error("Seuils Overdue invalides");
+      for(const k of Object.keys(copy.days)) if(raw.days[k]!==undefined) copy.days[k]=num(raw.days[k],"overdue "+k,0,3650);
+      for(const k of Object.keys(raw.days)) if(!Object.hasOwn(copy.days,k)) throw Error("Seuil Overdue inconnu : "+k);
+    }
+    if(raw.rules!==undefined){
+      if(!raw.rules||typeof raw.rules!=="object"||Array.isArray(raw.rules)) throw Error("Règles Overdue invalides");
+      for(const [code,d] of Object.entries(raw.rules)){
+        if(!Object.hasOwn(copy.rules,code)) throw Error("Règle Overdue inconnue : "+code);
+        if(!d||typeof d!=="object"||Array.isArray(d)) throw Error("Règle Overdue invalide : "+code);
+        const r=copy.rules[code];
+        if(d.on!==undefined){ if(typeof d.on!=="boolean") throw Error("État invalide : "+code); r.on=d.on; }
+        if(d.sev!==undefined){ if(!["Critique","Haute","Moyenne"].includes(d.sev)) throw Error("Sévérité invalide : "+code); r.sev=d.sev; }
+        if(d.c!==undefined){ if(!color(d.c)) throw Error("Couleur invalide : "+code); r.c=d.c; }
+        if(d.deleted!==undefined){ if(typeof d.deleted!=="boolean") throw Error("État invalide : "+code); r.deleted=d.deleted; }
+      }
+    }
+    return copy;
+  }
+  window.SpotSettings={fields,operators,matches,validate,validateOverdue};
 })();

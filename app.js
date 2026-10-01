@@ -34,8 +34,8 @@ const ALERT_BASE = {
   A8:{t:"Clôture en retard", sev:"Moyenne", c:"#ca8a04", h:"Retour effectué mais facture prestation ou archivage en attente depuis plus de X jours.", w:10, days:5, on:true, ico:"🧾"},
   A9:{t:"Qualité donnée / MAJ masse", sev:"Moyenne", c:"#ca8a04", h:"Une même date posée en masse sur plus de X % des dossiers → vérifier import/interface.", w:8, days:30, on:true, ico:"🧹"},
   A10:{t:"Donnée manquante / doublon", sev:"Moyenne", c:"#ca8a04", h:"COM, client ou n° dossier vide, ou n° dossier en double.", w:8, days:0, on:true, ico:"❓"},
-  A11:{t:"Restitution / facture après mise en attente", sev:"Haute", c:"#e9730c", h:"Mise effectuée mais ni retour ni facture prestation depuis plus de X jours.", w:15, days:7, on:true, ico:"🔄"},
-  A12:{t:"Facture prestation en attente", sev:"Haute", c:"#e9730c", h:"Dossier déclaré mais facture prestation vide depuis plus de X jours.", w:15, days:7, on:true, ico:"💰"},
+  A11:{t:"Retour conteneur / facture en attente", sev:"Haute", c:"#e9730c", h:"Mise effectuée mais ni retour ni facture prestation depuis plus de X jours (conteneur non restitué).", w:15, days:7, on:true, ico:"🔄"},
+  A12:{t:"Facture prestation en attente", sev:"Haute", c:"#e9730c", h:"Dossier déclaré et BAE obtenu mais facture prestation vide depuis plus de X jours.", w:15, days:7, on:true, ico:"💰"},
 };
 const SEV_DEFAULT = {Critique:"#d92d20", Haute:"#e9730c", Moyenne:"#ca8a04", OK:"#12805c"};
 const DEFAULT_CFG = {
@@ -45,19 +45,28 @@ const DEFAULT_CFG = {
 /* ---------- Overdue Files Hinterland — 9 points de contrôle ---------- */
 /* Périmètre configurable (défaut : sous-métier 20C). Chaque point = étape manquante + ancienneté > seuil vs date pilotage. */
 const OVERDUE_DEFS = {
-  L1:{t:"BAE en retard", h:"Enreg + Facture douane présents, BAE vide", sev:"Critique", c:"#d92d20", ico:"🛂"},
-  L2:{t:"Facture Douane en retard", h:"Enreg présent, Facture douane vide", sev:"Critique", c:"#d92d20", ico:"🏛️"},
-  L3:{t:"Mise en Livraison en retard", h:"BAE présent, Mise vide (flux récent ETA ≤ 30j)", sev:"Haute", c:"#e9730c", ico:"🚚"},
-  L4:{t:"Déchargement en retard", h:"Mise présente, Retour vide (flux récent ETA ≤ 30j)", sev:"Haute", c:"#e9730c", ico:"📦"},
-  L5:{t:"Restitution TC en retard", h:"Mise présente, Retour vide, sans Facture prestation", sev:"Haute", c:"#e9730c", ico:"🔄"},
-  L6:{t:"Déclarés sans facture prestation", h:"Enreg présent, Facture intervention vide", sev:"Haute", c:"#e9730c", ico:"🧾"},
-  L7:{t:"Facture prestation en retard", h:"BAE présent, Facture intervention vide", sev:"Moyenne", c:"#ca8a04", ico:"💰"},
-  L8:{t:"Archivage dossier en retard", h:"BAE présent, Archivage vide", sev:"Moyenne", c:"#ca8a04", ico:"🗄️"},
-  L9:{t:"Dossiers sans déclaration", h:"Validation présente, Enreg vide (anciens à solder)", sev:"Moyenne", c:"#ca8a04", ico:"❓"},
+  L1:{t:"BAE en retard", h:"Enreg + Facture douane présents, BAE vide, non archivé", sev:"Critique", c:"#d92d20", ico:"🛂"},
+  L2:{t:"Facture Douane en retard", h:"Enreg présent, Facture douane vide, non archivé", sev:"Critique", c:"#d92d20", ico:"🏛️"},
+  L3:{t:"Mise en Livraison en retard", h:"BAE présent, Mise vide, sans facture, non archivé", sev:"Haute", c:"#e9730c", ico:"🚚"},
+  L4:{t:"Livraison en retard", h:"Ni retour ni facture, non archivé : mise ancienne, ou flux terrestre (sans ETA/RTA) bloqué", sev:"Haute", c:"#e9730c", ico:"📦"},
+  L5:{t:"Retour Conteneur en retard", h:"Livré, sans facture ni archivage, BAE ancien (conteneur non restitué)", sev:"Haute", c:"#e9730c", ico:"🔄"},
+  L6:{t:"Déclarés sans facture prestation", h:"Enreg + BAE présents, sans facture intervention, non archivé", sev:"Haute", c:"#e9730c", ico:"🧾"},
+  L7:{t:"Facture prestation en retard", h:"Sans facture ni archivage : retour effectué, ou BAE ancien", sev:"Moyenne", c:"#ca8a04", ico:"💰"},
+  L8:{t:"Archivage dossier en retard", h:"Tout dossier non archivé du périmètre", sev:"Moyenne", c:"#ca8a04", ico:"🗄️"},
+  L9:{t:"Dossiers sans déclaration", h:"Validation présente, sans enregistrement, ETA connue", sev:"Moyenne", c:"#ca8a04", ico:"❓"},
+  L10:{t:"Dossiers avec Débours", h:"Marqueur financier transversal (montant/solde débours) — champ non présent dans l'extraction, non calculé", sev:"Haute", c:"#e9730c", ico:"💳"},
 };
-const OVERDUE_DEFAULT = {perim:["20C"], etaWindow:30, days:{L1:3,L2:3,L3:12,L4:2,L5:27,L6:7,L7:22,L8:18,L9:380}};
+const OVERDUE_DEFAULT = {perim:["20C"], days:{L1:3,L2:1,L3:12,L4a:18,L4b:12,L4c:13,L5:45,L6:1,L7:21,L10:0}};
+/* Seuils par règle (L4 a trois bras ; L8/L9 sans seuil ; L10 non calculée) */
+const OVRULE_DAYS = {L1:["L1"],L2:["L2"],L3:["L3"],L4:["L4a","L4b","L4c"],L5:["L5"],L6:["L6"],L7:["L7"],L8:[],L9:[],L10:[]};
+const OVDAY_LBL = {L1:"L1",L2:"L2",L3:"L3",L4a:"L4 mise",L4b:"L4 terrest.",L4c:"L4 amont",L5:"L5",L6:"L6",L7:"L7",L10:"L10"};
+OVERDUE_DEFAULT.rules = Object.fromEntries(Object.entries(OVERDUE_DEFS).map(([k,d])=>[k,{on:k!=="L10",sev:d.sev,c:d.c,deleted:false}]));
 let OVERDUE = JSON.parse(JSON.stringify(OVERDUE_DEFAULT));
-function loadOverdue(){ try{ const raw=localStorage.getItem("spot_overdue"); if(raw){ const o=JSON.parse(raw); if(o&&typeof o==="object"){ if(Array.isArray(o.perim)&&o.perim.length) OVERDUE.perim=o.perim.map(String); if(o.days&&typeof o.days==="object") Object.keys(OVERDUE_DEFAULT.days).forEach(k=>{ const v=Number(o.days[k]); if(Number.isFinite(v)&&v>=0&&v<=3650) OVERDUE.days[k]=v; }); if(Number.isFinite(Number(o.etaWindow))) OVERDUE.etaWindow=Math.max(0,Number(o.etaWindow)); } } }catch(err){ console.warn("Overdue non restauré",err); } }
+function loadOverdue(){ try{ const raw=localStorage.getItem("spot_overdue"); if(raw){ const o=JSON.parse(raw); if(o&&typeof o==="object"){ if(Array.isArray(o.perim)&&o.perim.length) OVERDUE.perim=o.perim.map(String); if(o.days&&typeof o.days==="object") Object.keys(OVERDUE_DEFAULT.days).forEach(k=>{ const v=Number(o.days[k]); if(Number.isFinite(v)&&v>=0&&v<=3650) OVERDUE.days[k]=v; }); if(o.rules&&typeof o.rules==="object") Object.keys(OVERDUE_DEFAULT.rules).forEach(k=>{ const s=o.rules[k]; if(s&&typeof s==="object"){ const t=OVERDUE.rules[k]; if(typeof s.on==="boolean") t.on=s.on; if(["Critique","Haute","Moyenne"].includes(s.sev)) t.sev=s.sev; if(typeof s.c==="string"&&/^#[0-9a-f]{6}$/i.test(s.c)) t.c=s.c; if(typeof s.deleted==="boolean") t.deleted=s.deleted; } }); } } }catch(err){ console.warn("Overdue non restauré",err); } }
+/* Visibilité d'une règle Overdue (réglable/masquable/supprimable en Administration) */
+function ovActive(c){ const rl=OVERDUE.rules&&OVERDUE.rules[c]; return !rl||(rl.on!==false&&!rl.deleted); }
+function ovSev(c){ const rl=OVERDUE.rules&&OVERDUE.rules[c]; return (rl&&rl.sev)||OVERDUE_DEFS[c].sev; }
+function ovColor(c){ const rl=OVERDUE.rules&&OVERDUE.rules[c]; return (rl&&rl.c)||OVERDUE_DEFS[c].c; }
 function saveOverdue(){ try{ localStorage.setItem("spot_overdue",JSON.stringify(OVERDUE)); }catch{} }
 let CFG = JSON.parse(JSON.stringify(DEFAULT_CFG));
 function loadCfg(){ try{ const raw=localStorage.getItem("spot_cfg"); if(raw) CFG=SpotSettings.validate(JSON.parse(raw),DEFAULT_CFG); }catch(err){ console.warn("Réglages non restaurés",err); } }
@@ -290,7 +299,7 @@ function enrichRow(r, P, counts){
       if(r.dossier&&counts[r.dossier]>1) al.push({c:"A10",d:`N° dossier en double (${counts[r.dossier]}×)`});
     }
     if(on("A11")&&r.dateMise&&!r.dateRetour&&!r.dateFactInt&&diffJ(P,r.dateMise)>(CFG.alerts.A11.days??7)) al.push({c:"A11",d:`Mise ${fmtD(r.dateMise)} sans retour ni facture depuis ${diffJ(P,r.dateMise)}j`});
-    if(on("A12")&&r.dateEnreg&&!r.dateFactInt&&diffJ(P,r.dateEnreg)>(CFG.alerts.A12.days??7)) al.push({c:"A12",d:`Enregistré ${fmtD(r.dateEnreg)} sans facture prestation depuis ${diffJ(P,r.dateEnreg)}j`});
+    if(on("A12")&&r.dateEnreg&&r.dateBAE&&!r.dateFactInt&&diffJ(P,r.dateEnreg)>(CFG.alerts.A12.days??7)) al.push({c:"A12",d:`Enregistré ${fmtD(r.dateEnreg)} (BAE ${fmtD(r.dateBAE)}) sans facture prestation depuis ${diffJ(P,r.dateEnreg)}j`});
     // exclusivités : l'alerte la plus précise l'emporte (évite le double comptage d'un même blocage)
     if(al.some(a=>a.c==="A11")){ const i=al.findIndex(a=>a.c==="A7"); if(i>=0) al.splice(i,1); }
     if(al.some(a=>a.c==="A12")){ const i=al.findIndex(a=>a.c==="A8"); if(i>=0) al.splice(i,1); }
@@ -320,17 +329,26 @@ function overdueAge(pilot, d){ return (!d||!(d instanceof Date)||isNaN(d))?null:
 function overdueOf(r, pilot){
   if(!overdueInPerim(r)) return [];
   const D=OVERDUE.days, out=[];
-  const ageEnreg=overdueAge(pilot,r.dateEnreg), ageFact=overdueAge(pilot,r.dateFactDouane), ageBAE=overdueAge(pilot,r.dateBAE), ageMise=overdueAge(pilot,r.dateMise), ageRetour=overdueAge(pilot,r.dateRetour), ageValid=overdueAge(pilot,r.dateValidation);
-  const etaRecent = r.dateETA ? (pilot - r.dateETA)/86400000 <= OVERDUE.etaWindow : false;
-  if(r.dateEnreg&&r.dateFactDouane&&!r.dateBAE&&ageFact!=null&&ageFact>D.L1) out.push({c:"L1", age:ageFact, ref:r.dateFactDouane, miss:"BAE"});
-  if(r.dateEnreg&&!r.dateFactDouane&&ageEnreg!=null&&ageEnreg>D.L2) out.push({c:"L2", age:ageEnreg, ref:r.dateEnreg, miss:"Facture douane"});
-  if(r.dateBAE&&!r.dateMise&&etaRecent&&ageBAE!=null&&ageBAE>D.L3) out.push({c:"L3", age:ageBAE, ref:r.dateBAE, miss:"Mise en livraison"});
-  if(r.dateMise&&!r.dateRetour&&etaRecent&&ageMise!=null&&ageMise>D.L4) out.push({c:"L4", age:ageMise, ref:r.dateMise, miss:"Retour / Déchargement"});
-  if(r.dateMise&&!r.dateRetour&&!r.dateFactInt&&ageMise!=null&&ageMise>D.L5) out.push({c:"L5", age:ageMise, ref:r.dateMise, miss:"Restitution TC"});
-  if(r.dateEnreg&&!r.dateFactInt&&ageEnreg!=null&&ageEnreg>D.L6) out.push({c:"L6", age:ageEnreg, ref:r.dateEnreg, miss:"Facture prestation"});
-  if(r.dateBAE&&!r.dateFactInt&&ageBAE!=null&&ageBAE>D.L7) out.push({c:"L7", age:ageBAE, ref:r.dateBAE, miss:"Facture prestation"});
-  if(r.dateBAE&&!r.dateArchivage&&ageBAE!=null&&ageBAE>D.L8) out.push({c:"L8", age:ageBAE, ref:r.dateBAE, miss:"Archivage"});
-  if(r.dateValidation&&!r.dateEnreg&&ageValid!=null&&ageValid>D.L9) out.push({c:"L9", age:ageValid, ref:r.dateValidation, miss:"Enregistrement douane"});
+  const ageEnreg=overdueAge(pilot,r.dateEnreg), ageFact=overdueAge(pilot,r.dateFactDouane), ageBAE=overdueAge(pilot,r.dateBAE), ageMise=overdueAge(pilot,r.dateMise), ageValid=overdueAge(pilot,r.dateValidation);
+  const noETA=!r.dateETA&&!r.dateRTA;
+  if(ovActive("L1")&&r.dateEnreg&&r.dateFactDouane&&!r.dateBAE&&!r.dateArchivage&&ageFact!=null&&ageFact>D.L1) out.push({c:"L1", age:ageFact, ref:r.dateFactDouane, miss:"BAE"});
+  if(ovActive("L2")&&r.dateEnreg&&!r.dateFactDouane&&!r.dateArchivage&&ageEnreg!=null&&ageEnreg>D.L2) out.push({c:"L2", age:ageEnreg, ref:r.dateEnreg, miss:"Facture douane"});
+  if(ovActive("L3")&&r.dateBAE&&!r.dateMise&&!r.dateFactInt&&!r.dateArchivage&&ageBAE!=null&&ageBAE>D.L3) out.push({c:"L3", age:ageBAE, ref:r.dateBAE, miss:"Mise en livraison"});
+  if(ovActive("L4")&&!r.dateRetour&&!r.dateFactInt&&!r.dateArchivage){
+    let am=null, rf=null;
+    if(r.dateMise&&ageMise!=null&&ageMise>D.L4a){ am=ageMise; rf=r.dateMise; }
+    else if(r.dateBAE&&!r.dateMise&&noETA&&ageBAE!=null&&ageBAE>D.L4b){ am=ageBAE; rf=r.dateBAE; }
+    else if(r.dateValidation&&!r.dateEnreg&&noETA&&ageValid!=null&&ageValid>D.L4c){ am=ageValid; rf=r.dateValidation; }
+    if(am!=null) out.push({c:"L4", age:am, ref:rf, miss:"Livraison"});
+  }
+  if(ovActive("L5")&&(r.dateMise||r.dateRetour)&&!r.dateFactInt&&!r.dateArchivage&&ageBAE!=null&&ageBAE>D.L5) out.push({c:"L5", age:ageBAE, ref:r.dateBAE, miss:"Conteneur / facture"});
+  if(ovActive("L6")&&r.dateEnreg&&r.dateBAE&&!r.dateFactInt&&!r.dateArchivage&&ageEnreg!=null&&ageEnreg>D.L6) out.push({c:"L6", age:ageEnreg, ref:r.dateEnreg, miss:"Facture prestation"});
+  if(ovActive("L7")&&!r.dateFactInt&&!r.dateArchivage){
+    if(r.dateRetour) out.push({c:"L7", age:overdueAge(pilot,r.dateRetour), ref:r.dateRetour, miss:"Facture prestation"});
+    else if(r.dateBAE&&ageBAE!=null&&ageBAE>D.L7) out.push({c:"L7", age:ageBAE, ref:r.dateBAE, miss:"Facture prestation"});
+  }
+  if(ovActive("L8")&&!r.dateArchivage) out.push({c:"L8", age:ageBAE!=null?ageBAE:(ageEnreg!=null?ageEnreg:ageValid), ref:r.dateBAE||r.dateEnreg||r.dateValidation, miss:"Archivage"});
+  if(ovActive("L9")&&r.dateValidation&&!r.dateEnreg&&r.dateETA) out.push({c:"L9", age:ageValid, ref:r.dateValidation, miss:"Enregistrement douane"});
   return out;
 }
 function overdueAll(){
@@ -369,7 +387,7 @@ function overdueFiltered(){
     if(com&&r.com!==com) return false;
     if(client&&r.client!==client) return false;
     if(cat&&o.c!==cat) return false;
-    if(sev&&OVERDUE_DEFS[o.c].sev!==sev) return false;
+    if(sev&&ovSev(o.c)!==sev) return false;
     if(minAge!=null&&!(o.age>=minAge)) return false;
     if(e1&&(!r.dateETA||r.dateETA<e1)) return false;
     if(e2&&(!r.dateETA||r.dateETA>e2)) return false;
@@ -745,12 +763,14 @@ function renderOverdue(){
   const total=Object.values(counts).reduce((s,n)=>s+n,0);
   const nav=$("#navOverdueCount"); if(nav) nav.textContent=total;
   const refDate=ovRefDate(), refLabel=ovRefLabel(), refCounts=overdueCountsAt(refDate);
-  cardsEl.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
+  const visRules=Object.keys(OVERDUE_DEFS).filter(c=>c!=="L10"&&ovActive(c));
+  const daysTxt=k=>(OVERDUE.days[k]!=null?` • &gt;${OVERDUE.days[k]}j`:" • sans seuil");
+  cardsEl.innerHTML=visRules.map(k=>{ const d=OVERDUE_DEFS[k];
     const n=counts[k]||0, rvc=refCounts[k]??0, ec=n-rvc;
     const active=S.ovCat===k?" active":"";
     const ecTxt=ec===0?"= réf.":(ec>0?`+${ec}`:`${ec}`);
-    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">${esc(refLabel)} : ${rvc} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
-  }).join("");
+    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${ovColor(k)}" title="${esc(d.h)}${OVERDUE.days[k]!=null?` — Seuil > ${OVERDUE.days[k]}j`:""}"><small>${d.ico} ${k} · ${ovSev(k)}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">${esc(refLabel)} : ${rvc} (${ecTxt})${daysTxt(k)}</small></button>`;
+  }).join("")||'<div class="empty-state"><b>Aucune règle Overdue active</b>Réactivez des règles dans Administration → Overdue.</div>';
   // date de référence manuelle (recalculée par le système)
   const ovRefDateEl=$("#ovRefDate");
   if(ovRefDateEl&&document.activeElement!==ovRefDateEl) ovRefDateEl.value=S.ovRefDate||"";
@@ -764,8 +784,8 @@ function renderOverdue(){
   const ovClient=$("#ovClient");
   if(ovClient){ const cur=S.ovClient; ovClient.innerHTML='<option value="">Tous</option>'+clients.slice(0,500).map(c=>`<option value="${esc(c)}" ${c===cur?"selected":""}>${esc(c)}</option>`).join("")+(clients.length>500?`<option value="" disabled>+${clients.length-500} autres — affinez la recherche</option>`:""); }
   const ovCat=$("#ovCat");
-  if(ovCat){ if(!ovCat.dataset.filled){ ovCat.dataset.filled="1"; ovCat.innerHTML='<option value="">Toutes (L1…L9)</option>'+Object.entries(OVERDUE_DEFS).map(([k,d])=>`<option value="${k}">${k} — ${esc(d.t)}</option>`).join(""); } }
-  if(ovCat) ovCat.value=S.ovCat||"";
+  if(ovCat){ ovCat.innerHTML='<option value="">Toutes</option>'+visRules.map(k=>`<option value="${k}">${k} — ${esc(OVERDUE_DEFS[k].t)}</option>`).join(""); }
+  if(ovCat) ovCat.value=(S.ovCat&&visRules.includes(S.ovCat))?S.ovCat:""; if(S.ovCat&&!visRules.includes(S.ovCat)) S.ovCat="";
   const ovSev=$("#ovSev"); if(ovSev) ovSev.value=S.ovSev||"";
   const ovMinAge=$("#ovMinAge"); if(ovMinAge&&document.activeElement!==ovMinAge) ovMinAge.value=S.ovMinAge||"";
   const ovEta1=$("#ovEta1"); if(ovEta1&&!S.ovEta1) ovEta1.value=""; if(ovEta1&&S.ovEta1) ovEta1.value=S.ovEta1;
@@ -774,32 +794,38 @@ function renderOverdue(){
   const refTh=$("#ovRefTh"); if(refTh) refTh.textContent=refLabel+(refDate?"":" (choisir une date)");
   const tb=$("#ovFollow tbody");
   if(tb){
-    tb.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
+    tb.innerHTML=visRules.map(k=>{ const d=OVERDUE_DEFS[k];
       const b=refCounts[k]??0, s=counts[k]||0, ec=s-b;
       let evo;
       if(!refDate) evo='<span style="color:#94a3b8">—</span>';
       else if(b>0){ const p=Math.round((s-b)/b*100); evo=p>0?`🔺 +${p}%`:p<0?`🔽 ${p}%`:"➖ stable"; }
       else evo=s>0?"🆕 nouveau":"➖";
-      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td><b>${fmtN(b)}</b></td><td><b style="color:${d.c}">${fmtN(s)}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${evo}</td></tr>`;
+      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td><b>${fmtN(b)}</b></td><td><b style="color:${ovColor(k)}">${fmtN(s)}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${evo}</td></tr>`;
     }).join("");
   }
   // par COM (respecte les filtres globaux pour rester cohérent avec les autres vues)
   const perCom={};
-  overdueGlobalList().forEach(({r,o})=>{ const k=r.com||"(vide)"; (perCom[k]=perCom[k]||{n:0,L1:0,L2:0,L3:0,L4:0,L5:0,L6:0,L7:0,L8:0,L9:0}); perCom[k].n++; perCom[k][o.c]++; });
+  overdueGlobalList().forEach(({r,o})=>{ const k=r.com||"(vide)"; (perCom[k]=perCom[k]||{n:0}); perCom[k].n++; perCom[k][o.c]=(perCom[k][o.c]||0)+1; });
+  const ovHead=$("#ovComTable thead tr");
+  if(ovHead) ovHead.innerHTML=`<th>COM</th><th>Dos.</th>${visRules.map(k=>`<th>${k}</th>`).join("")}`;
   const ct=$("#ovComTable tbody");
   if(ct){
     const arr=Object.entries(perCom).sort((a,b)=>b[1].n-a[1].n);
-    ct.innerHTML=arr.map(([k,v])=>`<tr><td><b style="cursor:pointer;color:#0f2a52" data-ovcom="${esc(k)}">${esc(k)}</b></td><td><b>${v.n}</b></td><td>${v.L1||""}</td><td>${v.L2||""}</td><td>${v.L3||""}</td><td>${v.L4||""}</td><td>${v.L5||""}</td><td>${v.L6||""}</td><td>${v.L7||""}</td><td>${v.L8||""}</td><td>${v.L9||""}</td></tr>`).join("")||'<tr><td colspan="11" style="text-align:center;color:#64748b">Chargez l\'Excel pour voir les COM Hinterland.</td></tr>';
+    const ncol=visRules.length+2;
+    ct.innerHTML=arr.map(([k,v])=>`<tr><td><b style="cursor:pointer;color:#0f2a52" data-ovcom="${esc(k)}">${esc(k)}</b></td><td><b>${fmtN(v.n)}</b></td>${visRules.map(c=>`<td>${v[c]||""}</td>`).join("")}</tr>`).join("")||`<tr><td colspan="${ncol}" style="text-align:center;color:#64748b">Chargez l'Excel pour voir les COM Hinterland.</td></tr>`;
     $$("#ovComTable [data-ovcom]").forEach(el=>el.onclick=()=>{ S.ovCom=el.dataset.ovcom; const s=$("#ovCom"); if(s) s.value=S.ovCom; S.ovPage=0; renderOverdue(); goto("overdue"); });
   }
-  // calibration vs référence recalculée par le système
+  // calibration vs référence recalculée par le système (+ ligne Débours non calculée)
   const calRefTh=$("#ovCalibRefTh"); if(calRefTh) calRefTh.textContent=refLabel;
   const cal=$("#ovCalib tbody");
   if(cal){
-    cal.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
+    const rows=visRules.map(k=>{ const d=OVERDUE_DEFS[k];
       const s=counts[k]||0, rvc=refCounts[k]??0, ec=s-rvc;
-      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td><b>&gt; ${OVERDUE.days[k]}j</b></td><td><b>${fmtN(s)}</b></td><td>${fmtN(rvc)}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
-    }).join("");
+      const seuil=OVERDUE.days[k]!=null?`<b>&gt; ${OVERDUE.days[k]}j</b>`:'<span style="color:#94a3b8">sans seuil</span>';
+      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td>${seuil}</td><td><b>${fmtN(s)}</b></td><td>${fmtN(rvc)}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
+    });
+    if(!OVERDUE.rules?.L10?.deleted) rows.push(`<tr><td><b>L10</b></td><td>${esc(OVERDUE_DEFS.L10.t)}<br><small style="color:#64748b">${esc(OVERDUE_DEFS.L10.h)}</small></td><td><span style="color:#94a3b8">champ requis</span></td><td>—</td><td>—</td><td><span style="color:#94a3b8">non calculé</span></td></tr>`);
+    cal.innerHTML=rows.join("");
   }
   // table dossiers
   const list=overdueFiltered();
@@ -808,7 +834,7 @@ function renderOverdue(){
   const slice=list.slice(S.ovPage*S.perPage,(S.ovPage+1)*S.perPage);
   $("#ovPagerInfo").textContent=`${fmtN(list.length)} dossier(s) • Page ${S.ovPage+1}/${pages}`;
   const q=norm(S.ovQ||"");
-  $("#ovTable tbody").innerHTML=slice.map(({r,o})=>{const d=OVERDUE_DEFS[o.c];return `<tr data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td><span class="pill" style="border-color:${d.c};color:${d.c}"><b>${o.c}</b></span><br><small>${d.ico} ${esc(d.t.slice(0,18))}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td>${esc(o.miss)}<br><small style="color:#64748b">réf ${fmtD(o.ref)}</small></td><td><b class="late">${o.age}j</b></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`;}).join("")||(S.enriched.length?'<tr><td colspan="8"><div class="empty-state"><b>Aucun Overdue sur ce périmètre</b>Ajustez les seuils ou le COM.</div></td></tr>':'<tr><td colspan="8"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM ».</div></td></tr>');
+  $("#ovTable tbody").innerHTML=slice.map(({r,o})=>{const d=OVERDUE_DEFS[o.c];return `<tr data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td><span class="pill" style="border-color:${ovColor(o.c)};color:${ovColor(o.c)}"><b>${o.c}</b></span><br><small>${d.ico} ${esc(d.t.slice(0,18))}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td>${esc(o.miss)}<br><small style="color:#64748b">réf ${fmtD(o.ref)}</small></td><td><b class="late">${o.age}j</b></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`;}).join("")||(S.enriched.length?'<tr><td colspan="8"><div class="empty-state"><b>Aucun Overdue sur ce périmètre</b>Ajustez les seuils ou le COM.</div></td></tr>':'<tr><td colspan="8"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM ».</div></td></tr>');
   $$("#ovTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
 function sortRows(rows){
@@ -1087,9 +1113,23 @@ function renderAdmin(){
   $("#cfgAlertTable tbody").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<tr><td><b>${k}</b> ${d.ico||""}</td><td><b>${esc(d.t)}</b><br><small style="color:#64748b">${esc(d.h)}</small></td><td><input type="checkbox" data-on="${k}" ${d.on!==false?"checked":""} style="width:18px;height:18px"></td><td><select data-sev="${k}">${["Critique","Haute","Moyenne"].map(s=>`<option ${d.sev===s?"selected":""}>${s}</option>`).join("")}</select></td><td><input type="number" min="0" max="50" data-w="${k}" value="${d.w}"></td><td><input type="number" min="0" max="90" data-days="${k}" value="${d.days}" title="Seuil jours (ancienneté du blocage ; A3 = tolérance d'inversion ; A9 = % de dossiers)"></td><td><input type="color" class="cfg-color" data-col="${k}" value="${d.c}"></td></tr>`).join("");
   $("#cfgSevColors").innerHTML=["Critique","Haute","Moyenne","OK"].map(s=>`<div class="f-field"><label>${s}</label><div style="display:flex;gap:8px;align-items:center"><input type="color" class="cfg-color" data-sevc="${s}" value="${CFG.sevColors[s]}"><b>${S.enriched.filter(r=>r.crit===s).length} dossiers</b></div></div>`).join("");
   $$("#cfgAlertTable tbody tr").forEach(row=>{const input=row.querySelector("[data-on]");if(input&&CFG.alerts[input.dataset.on]?.deleted)row.remove();});
-  const ovLabels={L1:"L1 BAE",L2:"L2 FactDouane",L3:"L3 Mise",L4:"L4 Décharg",L5:"L5 Restitution",L6:"L6 Déclarés s/fact",L7:"L7 FactPrest",L8:"L8 Archivage",L9:"L9 Sans déclar"};
-  const ovGrid=$("#cfgOverdueGrid");
-  if(ovGrid) ovGrid.innerHTML=Object.keys(OVERDUE_DEFAULT.days).map(k=>`<div class="f-field"><label>${ovLabels[k]} (j)</label><input type="number" min="0" max="3650" data-ovdays="${k}" value="${OVERDUE.days[k]}"></div>`).join("")+`<div class="f-field"><label>Fenêtre flux ETA (j)</label><input type="number" min="0" max="365" data-oveta="1" value="${OVERDUE.etaWindow}"></div>`;
+  const ovBody=$("#cfgOverdueTable tbody");
+  if(ovBody){
+    ovBody.innerHTML=Object.keys(OVERDUE_DEFS).filter(k=>!OVERDUE.rules[k]?.deleted).map(k=>{ const d=OVERDUE_DEFS[k], r=OVERDUE.rules[k];
+      const subs=OVRULE_DAYS[k]||[];
+      const seuil=subs.length?subs.map(s=>`<label style="display:block;font-size:11px;color:#64748b">${OVDAY_LBL[s]}<br><input type="number" min="0" max="3650" data-ovdays="${s}" value="${OVERDUE.days[s]}" style="width:76px"></label>`).join(""):(k==="L10"?'<span style="color:#94a3b8">champ requis</span>':'<span style="color:#94a3b8">sans seuil</span>');
+      return `<tr style="${r.on===false?"opacity:.55":""}"><td><b>${k}</b> ${d.ico||""}</td><td><b>${esc(d.t)}</b><br><small style="color:#64748b">${esc(d.h)}</small></td><td><input type="checkbox" data-ovon="${k}" ${r.on!==false?"checked":""} style="width:18px;height:18px"></td><td><select data-ovsev="${k}">${["Critique","Haute","Moyenne"].map(s=>`<option ${r.sev===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${seuil}</td><td><input type="color" class="cfg-color" data-ovcol="${k}" value="${r.c}"></td><td style="white-space:nowrap"><button class="btn small" data-ovtoggle="${k}">${r.on===false?"Afficher":"Masquer"}</button> <button class="btn small ghost" data-ovdel="${k}" aria-label="Supprimer ${k}">Supprimer</button></td></tr>`;
+    }).join("");
+    $$("#cfgOverdueTable [data-ovtoggle]").forEach(b=>b.onclick=()=>{ const r=OVERDUE.rules[b.dataset.ovtoggle]; r.on=r.on===false; saveOverdue(); renderAll(); renderAdmin(); renderMethodo(); toast(r.on?"Règle Overdue affichée":"Règle Overdue masquée partout"); });
+    $$("#cfgOverdueTable [data-ovdel]").forEach(b=>b.onclick=()=>{ OVERDUE.rules[b.dataset.ovdel].deleted=true; saveOverdue(); renderAll(); renderAdmin(); renderMethodo(); toast("Règle Overdue supprimée (↩ Défaut pour restaurer)"); });
+    $$("#cfgOverdueTable [data-ovon]").forEach(i=>i.onchange=()=>{ OVERDUE.rules[i.dataset.ovon].on=i.checked; saveOverdue(); renderAll(); renderAdmin(); });
+  }
+  const ovDel=$("#cfgOverdueDeleted");
+  if(ovDel){
+    const gone=Object.keys(OVERDUE_DEFS).filter(k=>OVERDUE.rules[k]?.deleted);
+    ovDel.innerHTML=gone.length?`<details class="detail-section"><summary>Règles Overdue supprimées (${gone.length}) — restaurer</summary><div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 0">${gone.map(k=>`<button class="btn small" data-ovrestore="${k}">↩ ${k} ${esc(OVERDUE_DEFS[k].t)}</button>`).join("")}</div></details>`:"";
+    $$("#cfgOverdueDeleted [data-ovrestore]").forEach(b=>b.onclick=()=>{ const r=OVERDUE.rules[b.dataset.ovrestore]; r.deleted=false; r.on=true; saveOverdue(); renderAll(); renderAdmin(); renderMethodo(); toast("Règle Overdue restaurée"); });
+  }
   const ovPer=$("#cfgOverduePerim"); if(ovPer) ovPer.value=OVERDUE.perim.join(", ");
 }
 function collectAdmin(){
@@ -1103,8 +1143,10 @@ function collectAdmin(){
   $$("#cfgAlertTable input[data-days]").forEach(i=>{ CFG.alerts[i.dataset.days].days=Math.max(0,+i.value||0); });
   $$("#cfgAlertTable input[data-col]").forEach(i=>{ CFG.alerts[i.dataset.col].c=i.value; });
   $$("#cfgSevColors input[data-sevc]").forEach(i=>{ CFG.sevColors[i.dataset.sevc]=i.value; });
-  $$("#cfgOverdueGrid input[data-ovdays]").forEach(i=>{ OVERDUE.days[i.dataset.ovdays]=Math.max(0,+i.value||0); });
-  const ovEta=document.querySelector('#cfgOverdueGrid input[data-oveta]'); if(ovEta) OVERDUE.etaWindow=Math.max(0,+ovEta.value||0);
+  $$("#cfgOverdueTable input[data-ovdays]").forEach(i=>{ if(i.dataset.ovdays in OVERDUE_DEFAULT.days) OVERDUE.days[i.dataset.ovdays]=Math.max(0,+i.value||0); });
+  $$("#cfgOverdueTable input[data-ovon]").forEach(i=>{ if(OVERDUE.rules[i.dataset.ovon]) OVERDUE.rules[i.dataset.ovon].on=i.checked; });
+  $$("#cfgOverdueTable select[data-ovsev]").forEach(s=>{ if(OVERDUE.rules[s.dataset.ovsev]) OVERDUE.rules[s.dataset.ovsev].sev=s.value; });
+  $$("#cfgOverdueTable input[data-ovcol]").forEach(i=>{ if(OVERDUE.rules[i.dataset.ovcol]) OVERDUE.rules[i.dataset.ovcol].c=i.value; });
   const ovPer=$("#cfgOverduePerim"); if(ovPer) OVERDUE.perim=ovPer.value.split(",").map(s=>s.trim()).filter(Boolean);
   saveOverdue();
 }
@@ -1199,10 +1241,10 @@ function setupSettings(){
   };
   $("#cfgAlertTable").addEventListener("change",e=>{if(e.target.matches("[data-on]")){CFG.alerts[e.target.dataset.on].on=e.target.checked;applyCfgAndRerender("Visibilité mise à jour");}});
   $("#settingsExport").onclick=()=>{
-    try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);applyCfgAndRerender();download("spot-reglages.json",JSON.stringify({format:"spot-settings",version:1,exportedAt:new Date().toISOString(),settings:CFG},null,2),"application/json");toast("Réglages sauvegardés · JSON prêt à partager");}catch(err){toast(esc(err.message));}
+    try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);OVERDUE=SpotSettings.validateOverdue(OVERDUE,OVERDUE_DEFAULT);saveOverdue();applyCfgAndRerender();download("spot-reglages.json",JSON.stringify({format:"spot-settings",version:1,exportedAt:new Date().toISOString(),settings:{...CFG,overdue:OVERDUE}},null,2),"application/json");toast("Réglages sauvegardés · JSON prêt à partager (alertes + Overdue)");}catch(err){toast(esc(err.message));}
   };
   $("#settingsImport").onclick=()=>$("#settingsFile").click();
-  $("#settingsFile").onchange=async e=>{const file=e.target.files[0];e.target.value="";if(!file)return;try{const config=SpotSettings.validate(JSON.parse(await file.text()),DEFAULT_CFG);CFG=config;applyCfgAndRerender("Réglages JSON importés et sauvegardés");}catch(err){toast("Import refusé : "+esc(err.message));}};
+  $("#settingsFile").onchange=async e=>{const file=e.target.files[0];e.target.value="";if(!file)return;try{const parsed=JSON.parse(await file.text());const config=SpotSettings.validate(parsed,DEFAULT_CFG);const ov=SpotSettings.validateOverdue(parsed.format==="spot-settings"?parsed.settings?.overdue:parsed.overdue,OVERDUE_DEFAULT);CFG=config;OVERDUE=ov;saveOverdue();applyCfgAndRerender("Réglages JSON importés et sauvegardés");}catch(err){toast("Import refusé : "+esc(err.message));}};
   $("#ruleBack").onclick=e=>{if(e.target===$("#ruleBack"))$("#ruleBack").classList.remove("open");};
   document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#ruleBack").classList.remove("open");});
 }
@@ -1227,7 +1269,7 @@ function renderGuide(){
   <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A12</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
   <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement <b>complet</b> + <b>panneau détail</b> (KPIs, criticité, alertes dominantes, volume mensuel <b>complet</b>, <b>délais moyens entre étapes vs SLA</b>, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ e-mail.</div>
   <div class="guide-step"><b>6. Exporter sans limite.</b> <b>Toutes les listes sont intégrales</b> (COM, métiers, clients, mois, matrice BU) ; seuls les tableaux de dossiers/alertes sont <b>paginés</b> (100 à 1000 lignes/page réglables) pour rester fluides. Exports <code>CSV / XLSX / JSON</code> : volume complet, compteur annoncé, aucune troncature.</div>
-  <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A12 (A5 = facture douane, A11 = restitution, A12 = facture prestation), activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
+  <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A12 (A5 = facture douane, A11 = retour conteneur, A12 = facture prestation), activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
   <div class="guide-step"><b>8. Rituel quotidien conseillé (10 min).</b> Charger Excel → vérifier date → lire indicateurs → traiter 🔴 puis 🟠 → envoyer situations COM en difficulté → exporter la sélection du jour.</div>
   <div class="footer-note">💡 Astuce : épinglez les dossiers suivis (onglet <b>Épinglés</b>), ajoutez vos notes, puis générez un rapport cadré via 🧭 <b>Rapport</b> (Excel mis en forme ou Word structuré).</div>`;
 }
