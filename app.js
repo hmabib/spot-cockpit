@@ -161,6 +161,7 @@ function setImportState(state,message){
   $("#importTitle").textContent=state==="loaded"?`${fmtN(S.enriched.length)} dossiers disponibles`:state==="loading"?"Préparation des dossiers":state==="error"?"L’import n’a pas abouti":"Importez vos dossiers";
   $("#loadStatus").textContent=message||S.fileName||"Export « Dossiers par COM »";
   $("#importAction").textContent=S.enriched.length?"Remplacer le fichier":"Choisir un fichier";
+  const be=$("#btnEject"); if(be) be.disabled=(state!=="loaded");
 }
 
 /* IndexedDB minimal */
@@ -1485,6 +1486,22 @@ function openMailModal(com){
   $("#mailBack").classList.add("open");
 }
 
+/* Éjecte le fichier chargé : décharge le dataset, prêt pour un nouvel import.
+   1 clic sans confirmation (le fichier source reste rechargeable).
+   Purge : mémoire, IndexedDB, nom de fichier, épingles/notes (indexées par ligne, donc caduques).
+   Conserve : mapping, réglages, seuils, snapshots, préférences. */
+async function ejectFile(){
+  if(!S.enriched.length){ toast("Aucun fichier chargé"); return; }
+  S.rows=[]; S.enriched=[]; S.fileName=""; S.mapping=null; S.headers=[];
+  S.pins={}; S.notes={}; S.pinSel=new Set(); savePins(); saveNotes();
+  try{ await IDB.del("dossiers"); }catch{}
+  try{ localStorage.removeItem("spot_file"); }catch{}
+  const dr=$("#drawer"); if(dr) dr.classList.remove("open"); S.drawerId=undefined;
+  S.pageMain=0; S.pageAlert=0; S.ovPage=0;
+  clearAllFilters(); fillSelects(); renderAll(); setImportState("empty");
+  toast("⏏ Fichier éjecté — épingles et notes effacées, réglages conservés.");
+}
+
 /* ---------- Init ---------- */
 async function init(){
   loadCfg(); loadOverdue(); loadOvRefDate(); applySevColors();
@@ -1630,6 +1647,7 @@ async function init(){
   $("#comDetailXlsx").onclick=()=>{ if(S.selCom) exportXLSX(`spot_situation_${S.selCom}.xlsx`,baseFiltered().filter(x=>x.com===S.selCom)); };
   $("#comDetailMail").onclick=()=>{ if(S.selCom) openMailModal(S.selCom); };
   $("#btnReset").onclick=async()=>{ if(!confirm("Effacer les données locales ?"))return; S.rows=[];S.enriched=[];S.fileName="";await IDB.del("dossiers");localStorage.removeItem("spot_mapping");localStorage.removeItem("spot_file");clearAllFilters();fillSelects();renderAll();setImportState("empty");toast("🗑 Données locales effacées"); };
+  const be=$("#btnEject"); if(be) be.onclick=()=>ejectFile();
   $("#btnImport").onclick=()=>$("#fileInput").click();
   $("#fileInput").onchange=e=>{ readFile(e.target.files[0]); e.target.value=""; };
   $("#fileInput2").onchange=e=>{ readFile(e.target.files[0]); e.target.value=""; };

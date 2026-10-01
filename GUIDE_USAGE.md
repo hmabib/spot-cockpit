@@ -9,6 +9,7 @@
 1. **📤 Charger Excel** ou glisser-déposer `Dossiers par COM.xlsx` dans le cadre pointillé.
 2. Fenêtre **Mapping intelligent** : vérifiez les pastilles (🟢 haute / 🟠 moyenne / 🔴 faible), ajustez si besoin → **Valider & analyser**.
 3. Le bandeau affiche `X dossiers • nom du fichier`. Les données sont mémorisées en local et restaurées au redémarrage. Sans fichier : les vues affichent un appel au chargement (aucun chiffre fictif).
+4. Pour changer de fichier : **⏏ Éjecter** (1 clic, sans confirmation — épingles et notes effacées car liées au fichier, réglages et mapping conservés). Purge totale via **🗑** (avec confirmation).
 
 ## 2. Régler le jour J (modifiable à tout moment)
 - En haut : champ 📅 **Date pilotage** + boutons **Auj.** / **−1j** / **+1j**.
