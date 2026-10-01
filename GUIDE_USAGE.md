@@ -17,7 +17,7 @@
 
 ## 3. Filtres globaux — partout, tout le temps
 La barre **🔎 Filtres globaux** (`COM / Métier / Mois ETA / Année ETA / Criticité / 🚨 Types d'alerte`) s'applique à **toutes les vues** : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le compteur affiche le périmètre filtré.
-- **🚨 Types d'alerte (multi-critères)** : cochez **un ou plusieurs types** (A1…A10) pour ne voir que ceux-là dans les listes (alertes, dossiers, tops, détail COM) ; vide = tous visibles. Boutons *Tous* / *Inverser*. Sur l'onglet Alertes, les cartes A1…A10 restent un raccourci de filtre simple (se combine avec la sélection).
+- **🚨 Types d'alerte (multi-critères)** : cochez **un ou plusieurs types** (A1…A12) pour ne voir que ceux-là dans les listes (alertes, dossiers, tops, détail COM) ; vide = tous visibles. Boutons *Tous* / *Inverser*. Sur l'onglet Alertes, les cartes A1…A12 restent un raccourci de filtre simple (se combine avec la sélection).
 - Chaque vue ajoute ses filtres propres : recherche texte, délais, étapes, tri (Dossiers, Alertes).
 - *Effacer* (barre globale) réinitialise **tous** les filtres d'un coup.
 
@@ -46,7 +46,7 @@ Survolez une ligne (Dossiers, Alertes, Épinglés, priorités, détail COM) : un
 - **Top alertes du jour** : bouton *Ouvrir* = fiche.
 
 ## 5. Traiter les alertes (clic → cas)
-1. Onglet **Alertes** : 10 cartes `A1…A10` avec icône, sévérité, compteur (périmètre global respecté). **Cliquez** = filtrer, re-cliquez = annuler. Grisées = désactivées dans Administration.
+1. Onglet **Alertes** : 12 cartes `A1…A12` avec icône, sévérité, compteur (périmètre global respecté). **Cliquez** = filtrer, re-cliquez = annuler. Grisées = désactivées dans Administration.
 2. Filtres : sévérité (pastilles), COM, Métier, **Mois/Année ETA**, recherche texte (`n° dossier, client, RFCV, BL…`), tri (criticité / ETA / RTA / stagnation).
 3. Cliquez une ligne → **fiche dossier** : score, alertes détaillées, **🗓 positionnement dates** (axe temporel : chaque jalon ETA→archivage situé en J±n vs jour J + tableau exact), timeline process, stagnations > SLA, inversions, **commentaires C1–C5 en bulles** (mots-clés RFCV/BL/BAE surlignés, vides signalés).
 
@@ -67,7 +67,7 @@ Globaux + `Sous-métier / Client / Sous-compte / Mois / Année / Recherche textu
 
 ## 8. Régler les alertes (Administration)
 - **SLA par transition** (jours), **seuils** ETA/RTA critiques et criticité (défaut `≥55 / ≥30 / ≥12`, ETA/RTA `< −7j`).
-- Par alerte `A1…A10` : **activation on/off, sévérité, poids (points), seuil jours, couleur**.
+- Par alerte `A1…A12` : **activation on/off, sévérité, poids (points), seuil jours, couleur**.
 - **Couleurs des sévérités** : color pickers Critique/Haute/Moyenne/OK → pastilles, cartes, indicateurs.
 - **💾 Enregistrer** = sauvegarde locale + recalcul immédiat. **↩ Défaut** = réinitialiser.
 

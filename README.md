@@ -41,14 +41,14 @@ Ordre process : `Validation → Docs → Note → Enreg → Facture → BAE → 
 | A9 | Qualité / MAJ masse | Moyenne | même date massive, ex 28/09 sur >30% |
 | A10 | Donnée manquante/doublon | Moyenne | COM/Client/N° vide ou doublon |
 
-**Score 0–100** : A1+30, A3/A6+25, A2+20, A7+18, A4/A5+15, A8+10, A9/A10+8, bonus retard <−14j +10, ≥3 stagnations +10. Seuils : ≥55 Critique, ≥30 Haute, ≥12 Moyenne, sinon OK. Le rouge des captures = Critique/Haute.
+**Score 0–100** : A1/A5/A6+30, A3+25, A7+18, A2/A4/A11/A12+15, A8+10, A9/A10+8 (somme des blocages en cours, sans double comptage de l'ancienneté). Seuils : ≥55 Critique, ≥30 Haute, ≥12 Moyenne, sinon OK. Le rouge des captures = Critique/Haute.
 
 ## 4. Vues & navigation
 
 - **Filtres globaux (partout)** : `COM / Métier / Mois ETA / Année ETA / Criticité / 🚨 Types d'alerte multi-critères (1 ou +)` + compteur de périmètre — appliqués à toutes les vues.
 - **Pilotage du mois (accueil)** : dashboard simple — sélecteur de mois + ← → + *Mois du jour J*, **filtres COM/Métier/Mois/Année/Criticité synchronisés + filtres de dates (mois/année RTA, période ETA)**, 6 KPIs du mois, sévérités, COM du mois, étapes bloquantes, top 10 priorités — **tout cliquable** vers Alertes/Dossiers/fiches (filtres propagés).
 - **Vue d'ensemble** : 6 KPI + **4 indicateurs de sévérité cliquables** + 4 jauges SVG + COM en difficulté (cliquable) + étape bloquante + distribution délais + top alertes + **cas préoccupants cliquables**.
-- **Alertes** : 10 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
+- **Alertes** : 12 cartes par type (icône, sévérité, **couleur paramétrable**, on/off) cliquables/filtrables, COM / Métier / Mois / Année, recherche texte, tri, exports **CSV + XLSX intégraux**.
 - **Dossiers** : filtres globaux + Sous-métier / Client / Sous-compte / Mois / Année / recherche textuelle / filtre délai / ETA du…au… / étape, tri, **pagination 100→1000 réglable**, fiche détail (timeline, **🗓 positionnement dates J±n**, **commentaires C1–C5 en bulles, mots-clés surlignés**).
 - **Performance COM** : classement **intégral** + **panneau détail** (6 KPIs, criticité, alertes dominantes cliquables, volume mensuel intégral, **délais moyens entre étapes vs SLA**, top 8 dossiers), verdict 🔴🟠🟢, **👁 voir / ⬇ CSV / ✉️ e-mail de situation** par COM.
 - **Vision BU** : par Métier/Sous-métier, top clients à risque, matrice Métier × étape.

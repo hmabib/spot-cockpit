@@ -20,17 +20,22 @@ const STEPS = [
   {k:"archivage", label:"Archivage", dateKey:"dateArchivage"},
 ];
 const SLA_DEFAULT = {validation:3, docs:2, note:2, douane:3, factDouane:3, bae:2, mise:3, retour:5, factInt:3, validFinal:5};
+/* Référentiel aligné sur la logique maison (Overdue L1–L9) : la sévérité reflète le blocage
+   en cours (point dur douane = Critique, flux à traiter = Haute, stock à solder = Moyenne).
+   Seules les stagnations EN COURS scorent (l'historique reste visible, sans points). */
 const ALERT_BASE = {
-  A1:{t:"ETA dépassée, BAE manquant", sev:"Critique", c:"#d92d20", h:"L'arrivée estimée est dépassée sans BAE. L'ETA ne confirme pas l'arrivée réelle ; consulter la RTA.", w:30, days:0, on:true, ico:"🚢"},
-  A2:{t:"RTA passée, non archivé", sev:"Haute", c:"#e9730c", h:"La RTA atteste l'arrivée réelle des marchandises. Le dossier reste à clôturer ; son âge se calcule depuis cette arrivée.", w:20, days:0, on:true, ico:"📦"},
-  A3:{t:"Inversion chronologique", sev:"Critique", c:"#d92d20", h:"Une étape est datée avant l'étape précédente → erreur de saisie ou contournement process.", w:25, days:0, on:true, ico:"🔀"},
-  A4:{t:"Stagnation amont (> SLA)", sev:"Haute", c:"#e9730c", h:"Validation → Docs → Note bloqués plus longtemps que le SLA.", w:15, days:0, on:true, ico:"⏳"},
-  A5:{t:"Stagnation douane", sev:"Haute", c:"#e9730c", h:"Enregistrement sans facture, ou facture sans BAE (dépassement SLA).", w:15, days:0, on:true, ico:"🏛️"},
-  A6:{t:"Blocage BAE", sev:"Critique", c:"#d92d20", h:"Facture douane présente, BAE vide depuis plus de X jours → point dur douane.", w:25, days:3, on:true, ico:"🛂"},
-  A7:{t:"Blocage livraison", sev:"Haute", c:"#e9730c", h:"BAE obtenu mais mise/retour en retard vs SLA.", w:18, days:2, on:true, ico:"🚚"},
-  A8:{t:"Clôture en retard", sev:"Moyenne", c:"#ca8a04", h:"Retour effectué mais facture/validation/archivage en attente.", w:10, days:5, on:true, ico:"🧾"},
-  A9:{t:"Qualité donnée / MAJ masse", sev:"Moyenne", c:"#ca8a04", h:"Date identique massive ou champs vides/doublons.", w:8, days:30, on:true, ico:"🧹"},
+  A1:{t:"ETA dépassée, BAE manquant", sev:"Critique", c:"#d92d20", h:"L'arrivée estimée est dépassée sans BAE (risque surestaries). L'ETA ne confirme pas l'arrivée réelle ; consulter la RTA.", w:30, days:0, on:true, ico:"🚢"},
+  A2:{t:"RTA passée, non archivé", sev:"Moyenne", c:"#ca8a04", h:"Arrivée réelle confirmée (RTA) mais dossier non archivé : stock à solder.", w:15, days:0, on:true, ico:"📦"},
+  A3:{t:"Inversion chronologique", sev:"Critique", c:"#d92d20", h:"Une étape est datée avant la précédente au-delà de la tolérance → erreur de saisie ou contournement (la facturation anticipée après mise/retour est acceptée).", w:25, days:2, on:true, ico:"🔀"},
+  A4:{t:"Stagnation amont en cours (> SLA)", sev:"Haute", c:"#e9730c", h:"Validation → Docs → Note bloqués maintenant plus longtemps que le SLA.", w:15, days:0, on:true, ico:"⏳"},
+  A5:{t:"Facture douane en retard", sev:"Critique", c:"#d92d20", h:"Enregistrement présent, facture douane vide depuis plus de X jours → point dur douane.", w:30, days:3, on:true, ico:"🏛️"},
+  A6:{t:"Blocage BAE", sev:"Critique", c:"#d92d20", h:"Facture douane présente, BAE vide depuis plus de X jours → point dur douane.", w:30, days:3, on:true, ico:"🛂"},
+  A7:{t:"Blocage livraison", sev:"Haute", c:"#e9730c", h:"BAE obtenu mais mise/retour en attente depuis plus de X jours.", w:18, days:2, on:true, ico:"🚚"},
+  A8:{t:"Clôture en retard", sev:"Moyenne", c:"#ca8a04", h:"Retour effectué mais facture prestation ou archivage en attente depuis plus de X jours.", w:10, days:5, on:true, ico:"🧾"},
+  A9:{t:"Qualité donnée / MAJ masse", sev:"Moyenne", c:"#ca8a04", h:"Une même date posée en masse sur plus de X % des dossiers → vérifier import/interface.", w:8, days:30, on:true, ico:"🧹"},
   A10:{t:"Donnée manquante / doublon", sev:"Moyenne", c:"#ca8a04", h:"COM, client ou n° dossier vide, ou n° dossier en double.", w:8, days:0, on:true, ico:"❓"},
+  A11:{t:"Restitution / facture après mise en attente", sev:"Haute", c:"#e9730c", h:"Mise effectuée mais ni retour ni facture prestation depuis plus de X jours.", w:15, days:7, on:true, ico:"🔄"},
+  A12:{t:"Facture prestation en attente", sev:"Haute", c:"#e9730c", h:"Dossier déclaré mais facture prestation vide depuis plus de X jours.", w:15, days:7, on:true, ico:"💰"},
 };
 const SEV_DEFAULT = {Critique:"#d92d20", Haute:"#e9730c", Moyenne:"#ca8a04", OK:"#12805c"};
 const DEFAULT_CFG = {
@@ -50,8 +55,6 @@ const OVERDUE_DEFS = {
   L8:{t:"Archivage dossier en retard", h:"BAE présent, Archivage vide", sev:"Moyenne", c:"#ca8a04", ico:"🗄️"},
   L9:{t:"Dossiers sans déclaration", h:"Validation présente, Enreg vide (anciens à solder)", sev:"Moyenne", c:"#ca8a04", ico:"❓"},
 };
-const OVERDUE_REF_2109 = {L1:8,L2:1,L3:32,L4:17,L5:21,L6:154,L7:42,L8:423,L9:43};
-const OVERDUE_REF_3009 = {L1:0,L2:0,L3:15,L4:29,L5:15,L6:160,L7:78,L8:434,L9:37};
 const OVERDUE_DEFAULT = {perim:["20C"], etaWindow:30, days:{L1:3,L2:3,L3:12,L4:2,L5:27,L6:7,L7:22,L8:18,L9:380}};
 let OVERDUE = JSON.parse(JSON.stringify(OVERDUE_DEFAULT));
 function loadOverdue(){ try{ const raw=localStorage.getItem("spot_overdue"); if(raw){ const o=JSON.parse(raw); if(o&&typeof o==="object"){ if(Array.isArray(o.perim)&&o.perim.length) OVERDUE.perim=o.perim.map(String); if(o.days&&typeof o.days==="object") Object.keys(OVERDUE_DEFAULT.days).forEach(k=>{ const v=Number(o.days[k]); if(Number.isFinite(v)&&v>=0&&v<=3650) OVERDUE.days[k]=v; }); if(Number.isFinite(Number(o.etaWindow))) OVERDUE.etaWindow=Math.max(0,Number(o.etaWindow)); } } }catch(err){ console.warn("Overdue non restauré",err); } }
@@ -120,7 +123,7 @@ const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
 /* ---------- État ---------- */
-const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"", ovCom:"", ovClient:"", ovQ:"", ovCat:"", ovSev:"", ovMinAge:"", ovEta1:"", ovEta2:"", ovSort:"age", ovPage:0, ovRef:null };
+const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"", ovCom:"", ovClient:"", ovQ:"", ovCat:"", ovSev:"", ovMinAge:"", ovEta1:"", ovEta2:"", ovSort:"age", ovPage:0, ovRefDate:"2026-09-21" };
 /* Filtres globaux — appliqués à toutes les vues */
 const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[], clients:[], hideArchived:false };
 /* Préférences persistantes (toggles) */
@@ -216,10 +219,23 @@ function mapRow(headers, colIdx, rows, ri, mapping){
 
 /* ---------- Moteur d'enrichissement ---------- */
 function dossierCounts(rows){ const counts={}; rows.forEach(r=>{ if(r.dossier) counts[r.dossier]=(counts[r.dossier]||0)+1; }); return counts; }
-function enrichAll(rows){ const P=todayPilot(), counts=dossierCounts(rows); return rows.map(r=>enrichRow(r,P,counts)); }
+/* MAJ masse (A9) : date posée en masse sur plus de X % des dossiers → import/interface à vérifier */
+let massInfo={set:null,pct:0};
+function massDates(rows){
+  massInfo={set:null,pct:0};
+  const rule=CFG.alerts.A9;
+  if(!rule||rule.on===false||rule.deleted||rule.conditions||!rows.length) return;
+  const pct=rule.days??30;
+  const freq=new Map();
+  rows.forEach(r=>{ STEPS.forEach(s=>{ const d=r[s.dateKey]; if(d instanceof Date&&!isNaN(d)){ const t=d.getTime(); freq.set(t,(freq.get(t)||0)+1); } }); });
+  let top=0; const set=new Set();
+  freq.forEach((n,t)=>{ const share=n/rows.length*100; if(share>pct){ set.add(t); if(share>top) top=share; } });
+  if(set.size) massInfo={set,pct:Math.round(top)};
+}
+function enrichAll(rows){ const P=todayPilot(), counts=dossierCounts(rows); massDates(rows); return rows.map(r=>enrichRow(r,P,counts)); }
 /* Version par blocs (gros volumes) : progression visible, interface non figée */
 async function enrichAllAsync(rows, onProgress){
-  const P=todayPilot(), counts=dossierCounts(rows);
+  const P=todayPilot(), counts=dossierCounts(rows); massDates(rows);
   const out=new Array(rows.length); const CH=20000;
   for(let i=0;i<rows.length;i+=CH){
     const end=Math.min(i+CH,rows.length);
@@ -249,35 +265,42 @@ function enrichRow(r, P, counts){
     pushStag(r.dateRetour,r.dateFactInt,SLA.retour,"Retour→FactInt");
     pushStag(r.dateFactInt,r.dateValidFinal,SLA.factInt,"FactInt→ValidFin");
     pushStag(r.dateValidFinal,r.dateArchivage,SLA.validFinal,"ValidFin→Archiv");
-    // inversions
-    const inv=[]; let prev=null, prevL="";
-    STEPS.map(s=>[s.label,r[s.dateKey]]).forEach(([l,d])=>{
-      if(d){ if(prev&&d<prev) inv.push(prevL+" → "+l); prev=d; prevL=l; } 
+    // inversions (écart en jours conservé pour la tolérance ; la facturation anticipée après mise/retour est acceptée)
+    const inv=[]; let prev=null, prevL="", prevK="";
+    STEPS.map(s=>[s.label,s.dateKey,r[s.dateKey]]).forEach(([l,k,d])=>{
+      if(d){ if(prev&&d<prev) inv.push({t:prevL+" → "+l, gap:diffJ(prev,d), pk:prevK, ck:k}); prev=d; prevL=l; prevK=k; }
     });
     // alertes (paramétrables depuis Administration)
+    // Seules les stagnations EN COURS scorent ; l'historique (écoulé) reste visible sans points.
     const al=[];
     const on=k=>!!CFG.alerts[k]&&CFG.alerts[k].on!==false&&!CFG.alerts[k].deleted&&!CFG.alerts[k].conditions;
+    const stagnNow=stagn.filter(s=>!/\(écoulé\)/.test(s.label));
     if(on("A1")&&r.dateETA&&delaiETA!=null&&delaiETA<0&&!r.dateBAE) al.push({c:"A1",d:`Arrivée estimée ${fmtD(r.dateETA)} dépassée de ${-delaiETA}j sans BAE · ${r.dateRTA?"arrivée réelle : "+fmtD(r.dateRTA):"RTA non renseignée : arrivée réelle non confirmée"}`});
     if(on("A2")&&r.dateRTA&&delaiRTA!=null&&delaiRTA<0&&!r.dateArchivage) al.push({c:"A2",d:`RTA ${fmtD(r.dateRTA)} dépassée de ${-delaiRTA}j, non archivé`});
-    if(on("A3")) inv.forEach(x=>al.push({c:"A3",d:"Inversion : "+x}));
-    if(on("A4")&&stagn.some(s=>s.label.startsWith("Validation")||s.label.startsWith("Docs")||s.label.startsWith("Note"))) al.push({c:"A4",d:stagn.filter(s=>/Validation|Docs|Note/.test(s.label)).map(s=>`${s.label} : ${s.jours}j`).join(" • ")});
-    if(on("A5")&&stagn.some(s=>/Enreg|Facture→BAE/.test(s.label))) al.push({c:"A5",d:stagn.filter(s=>/Enreg|Facture/.test(s.label)).map(s=>`${s.label} : ${s.jours}j`).join(" • ")});
+    if(on("A3")){ const tol=CFG.alerts.A3.days??2; inv.filter(x=>x.gap>tol&&!(x.ck==="dateFactInt"&&(x.pk==="dateRetour"||x.pk==="dateMise"))).forEach(x=>al.push({c:"A3",d:"Inversion : "+x.t})); }
+    if(on("A4")&&stagnNow.some(s=>s.label.startsWith("Validation")||s.label.startsWith("Docs")||s.label.startsWith("Note"))) al.push({c:"A4",d:stagnNow.filter(s=>/Validation|Docs|Note/.test(s.label)).map(s=>`${s.label} : ${s.jours}j`).join(" • ")});
+    if(on("A5")&&r.dateEnreg&&!r.dateFactDouane&&diffJ(P,r.dateEnreg)>(CFG.alerts.A5.days??3)) al.push({c:"A5",d:`Enregistrement ${fmtD(r.dateEnreg)} sans facture douane depuis ${diffJ(P,r.dateEnreg)}j → point dur douane`});
     if(on("A6")&&r.dateFactDouane&&!r.dateBAE&&diffJ(P,r.dateFactDouane)>(CFG.alerts.A6.days??3)) al.push({c:"A6",d:`Facture douane ${fmtD(r.dateFactDouane)} sans BAE depuis ${diffJ(P,r.dateFactDouane)}j`});
     if(on("A7")&&r.dateBAE&&(!r.dateMise||!r.dateRetour)){ const d=diffJ(P,r.dateBAE); if(d>(CFG.alerts.A7.days??2)) al.push({c:"A7",d:`BAE ${fmtD(r.dateBAE)}, livraison en attente depuis ${d}j`}); }
-    if(on("A8")&&r.dateRetour&&(!r.dateFactInt||!r.dateValidFinal||!r.dateArchivage)&&diffJ(P,r.dateRetour)>(CFG.alerts.A8.days??5)) al.push({c:"A8",d:`Retour ${fmtD(r.dateRetour)} sans clôture depuis ${diffJ(P,r.dateRetour)}j`});
+    if(on("A8")&&r.dateRetour&&(!r.dateFactInt||!r.dateArchivage)&&diffJ(P,r.dateRetour)>(CFG.alerts.A8.days??5)) al.push({c:"A8",d:`Retour ${fmtD(r.dateRetour)} sans clôture (facture/archivage) depuis ${diffJ(P,r.dateRetour)}j`});
+    if(on("A9")&&massInfo.set&&STEPS.some(s=>{ const d=r[s.dateKey]; return d instanceof Date&&massInfo.set.has(d.getTime()); })) al.push({c:"A9",d:`Date posée en masse sur ${massInfo.pct}% des dossiers — vérifier import/interface`});
     if(on("A10")){
       if(!r.com||!r.client||!r.dossier) al.push({c:"A10",d:"Champ clé vide : "+[!r.com&&"COM",!r.client&&"Client",!r.dossier&&"N° dossier"].filter(Boolean).join(", ")});
       if(r.dossier&&counts[r.dossier]>1) al.push({c:"A10",d:`N° dossier en double (${counts[r.dossier]}×)`});
     }
+    if(on("A11")&&r.dateMise&&!r.dateRetour&&!r.dateFactInt&&diffJ(P,r.dateMise)>(CFG.alerts.A11.days??7)) al.push({c:"A11",d:`Mise ${fmtD(r.dateMise)} sans retour ni facture depuis ${diffJ(P,r.dateMise)}j`});
+    if(on("A12")&&r.dateEnreg&&!r.dateFactInt&&diffJ(P,r.dateEnreg)>(CFG.alerts.A12.days??7)) al.push({c:"A12",d:`Enregistré ${fmtD(r.dateEnreg)} sans facture prestation depuis ${diffJ(P,r.dateEnreg)}j`});
+    // exclusivités : l'alerte la plus précise l'emporte (évite le double comptage d'un même blocage)
+    if(al.some(a=>a.c==="A11")){ const i=al.findIndex(a=>a.c==="A7"); if(i>=0) al.splice(i,1); }
+    if(al.some(a=>a.c==="A12")){ const i=al.findIndex(a=>a.c==="A8"); if(i>=0) al.splice(i,1); }
     const ruleRow={...r,delaiETA,delaiRTA,etapeKey,stagnCount:stagn.length,comments:[r.com1,r.com2,r.com3,r.com4,r.com5].filter(Boolean).join(" • ")};
     Object.entries(CFG.alerts).forEach(([code,rule])=>{
       if(rule.on!==false&&!rule.deleted&&rule.conditions&&SpotSettings.matches(rule,ruleRow,P)) al.push({c:code,d:rule.h||rule.t});
     });
-    // score criticité (poids paramétrables)
+    // score criticité (poids paramétrables) : somme des blocages en cours.
+    // L'ancienneté est déjà portée par les seuils de chaque règle (pas de double comptage).
     let sc=0;
     al.forEach(a=>{ sc+= (CFG.alerts[a.c]?.w ?? 8); });
-    if(delaiETA!=null&&delaiETA<-14) sc+=10; if(delaiRTA!=null&&delaiRTA<-14) sc+=8;
-    if(stagn.length>=3) sc+=10;
     sc=Math.min(100,sc);
     const crit = sc>=CFG.thCrit?"Critique": sc>=CFG.thHaute?"Haute": sc>=CFG.thMoy?"Moyenne":"OK";
     const comments=[r.com1,r.com2,r.com3,r.com4,r.com5].filter(x=>x&&String(x).trim()).join(" • ");
@@ -357,34 +380,22 @@ function overdueFiltered(){
   list.sort((a,b)=> S.ovSort==="dossier" ? String(a.r.dossier||"").localeCompare(String(b.r.dossier||"")) : S.ovSort==="com" ? String(a.r.com||"").localeCompare(String(b.r.com||"")) : S.ovSort==="client" ? String(a.r.client||"").localeCompare(String(b.r.client||"")) : (b.o.age||0)-(a.o.age||0));
   return list;
 }
-function overdueSnapshots(){
-  try{ return JSON.parse(localStorage.getItem("spot_overdue_snaps")||"[]"); }catch{ return []; }
+/* Référence de mesure manuelle : date choisie, recomptée par le système depuis le fichier chargé */
+const OV_REF_DEFAULT="2026-09-21";
+function ovRefDate(){ const v=S.ovRefDate||""; if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null; const d=new Date(v+"T00:00:00"); return isNaN(d)?null:d; }
+function ovRefLabel(){ const d=ovRefDate(); return d?("Réf. "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")):"Référence"; }
+function saveOvRefDate(){ try{ localStorage.setItem("spot_ovrefdate", S.ovRefDate||""); }catch{} }
+function loadOvRefDate(){ try{ const v=localStorage.getItem("spot_ovrefdate"); S.ovRefDate=(v&&/^\d{4}-\d{2}-\d{2}$/.test(v))?v:OV_REF_DEFAULT; }catch{ S.ovRefDate=OV_REF_DEFAULT; } }
+function overdueListAt(pilot){
+  const list=[];
+  if(!(pilot instanceof Date)||isNaN(pilot)) return list;
+  S.enriched.forEach(r=>{ if(F.hideArchived&&r.dateArchivage) return; if(!overdueMatchGlobal(r)) return; overdueOf(r,pilot).forEach(o=>list.push({r,o})); });
+  return list;
 }
-/* Référence de mesure manuelle : preset 21/09, preset 30/09 ou snapshot figé */
-function getOvRef(){
-  const r=S.ovRef;
-  if(r&&r.type==="snap"&&r.counts) return {label:r.label||("Snapshot "+(r.date||"")), counts:r.counts};
-  if(r&&r.key==="ref2109") return {label:"Réf. 21/09", counts:OVERDUE_REF_2109};
-  return {label:"Réf. 30/09", counts:OVERDUE_REF_3009};
-}
-function saveOvRef(){ try{ localStorage.setItem("spot_ovref", JSON.stringify(S.ovRef||{key:"ref3009"})); }catch{} }
-function loadOvRef(){ try{ const o=JSON.parse(localStorage.getItem("spot_ovref")||"null"); if(o&&(o.key==="ref2109"||o.key==="ref3009"||(o.type==="snap"&&o.counts))) S.ovRef=o; }catch{} if(!S.ovRef) S.ovRef={key:"ref3009"}; }
-function setOvRefFromSnap(s){
-  if(!s) return;
-  S.ovRef={type:"snap", date:s.date, file:s.file||"", label:"Snapshot "+s.date, counts:{...s.counts}};
-  saveOvRef();
-}
-function overdueSaveSnapshots(a){ try{ localStorage.setItem("spot_overdue_snaps",JSON.stringify(a)); }catch{} }
-function overdueTakeSnapshot(){
-  const P=todayPilot();
-  const counts=overdueCounts();
-  const perCom={};
-  overdueAll().forEach(({r,o})=>{ const k=r.com||"(vide)"; (perCom[k]=perCom[k]||{n:0}); perCom[k].n++; perCom[k][o.c]=(perCom[k][o.c]||0)+1; });
-  const snaps=overdueSnapshots();
-  snaps.push({date:new Date().toISOString().slice(0,10), pilot:($("#pilotDate")||{}).value||"", file:S.fileName||"", counts, perCom});
-  overdueSaveSnapshots(snaps.slice(-12));
-  toast(`📸 Snapshot Overdue enregistré — <b>${Object.values(counts).reduce((s,n)=>s+n,0)} dossiers</b> en retard (périmètre ${OVERDUE.perim.join(", ")})`);
-  renderOverdue();
+function overdueCountsAt(pilot){
+  const counts={L1:0,L2:0,L3:0,L4:0,L5:0,L6:0,L7:0,L8:0,L9:0};
+  overdueListAt(pilot).forEach(({o})=>{ counts[o.c]=(counts[o.c]||0)+1; });
+  return counts;
 }
 function overdueToCSV(rows){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
@@ -732,26 +743,16 @@ function renderOverdue(){
   const counts=overdueCounts();
   const total=Object.values(counts).reduce((s,n)=>s+n,0);
   const nav=$("#navOverdueCount"); if(nav) nav.textContent=total;
-  const ref=getOvRef();
+  const refDate=ovRefDate(), refLabel=ovRefLabel(), refCounts=overdueCountsAt(refDate);
   cardsEl.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-    const n=counts[k]||0, rvc=ref.counts[k]??0, ec=n-rvc;
+    const n=counts[k]||0, rvc=refCounts[k]??0, ec=n-rvc;
     const active=S.ovCat===k?" active":"";
     const ecTxt=ec===0?"= réf.":(ec>0?`+${ec}`:`${ec}`);
-    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">${esc(ref.label)} : ${rvc} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
+    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">${esc(refLabel)} : ${rvc} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
   }).join("");
-  // sélecteur de référence de mesure : presets + snapshots
-  const ovRefSel=$("#ovRef");
-  if(ovRefSel){
-    const snaps=overdueSnapshots();
-    ovRefSel.innerHTML=`<option value="ref2109">Réf. 21/09</option><option value="ref3009">Réf. 30/09</option>`+snaps.map((s,i)=>`<option value="snap:${i}">Snapshot ${esc(s.date)}${s.file?" — "+esc(s.file.slice(0,18)):""}</option>`).join("");
-    let cur="ref3009";
-    if(S.ovRef?.type==="snap"){
-      const idx=snaps.findIndex(s=>s.date===(S.ovRef.date||"")&&(s.file||"")===(S.ovRef.file||""));
-      if(idx>=0) cur="snap:"+idx;
-      else { if(!ovRefSel.querySelector('[value="snap:frozen"]')){ const o=document.createElement("option"); o.value="snap:frozen"; o.textContent=(S.ovRef.label||"Snapshot")+" (figée)"; ovRefSel.appendChild(o); } cur="snap:frozen"; }
-    } else cur=S.ovRef?.key||"ref3009";
-    ovRefSel.value=cur;
-  }
+  // date de référence manuelle (recalculée par le système)
+  const ovRefDateEl=$("#ovRefDate");
+  if(ovRefDateEl&&document.activeElement!==ovRefDateEl) ovRefDateEl.value=S.ovRefDate||"";
   $$("#ovCards [data-ov]").forEach(el=>el.onclick=()=>{ S.ovCat=S.ovCat===el.dataset.ov?"":el.dataset.ov; const sel=$("#ovCat"); if(sel) sel.value=S.ovCat; S.ovPage=0; renderOverdue(); });
   // sélecteurs : choix reconstruits à chaque rendu pour rester cohérents avec le fichier chargé
   const inPerim=S.enriched.filter(overdueInPerim);
@@ -768,24 +769,18 @@ function renderOverdue(){
   const ovMinAge=$("#ovMinAge"); if(ovMinAge&&document.activeElement!==ovMinAge) ovMinAge.value=S.ovMinAge||"";
   const ovEta1=$("#ovEta1"); if(ovEta1&&!S.ovEta1) ovEta1.value=""; if(ovEta1&&S.ovEta1) ovEta1.value=S.ovEta1;
   const ovEta2=$("#ovEta2"); if(ovEta2&&!S.ovEta2) ovEta2.value=""; if(ovEta2&&S.ovEta2) ovEta2.value=S.ovEta2;
-  // suivi : mesure du jour vs référence manuelle
-  const refTh=$("#ovRefTh"); if(refTh) refTh.textContent=ref.label;
+  // suivi : mesure du jour vs référence recalculée par le système
+  const refTh=$("#ovRefTh"); if(refTh) refTh.textContent=refLabel+(refDate?"":" (choisir une date)");
   const tb=$("#ovFollow tbody");
   if(tb){
     tb.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-      const b=ref.counts[k]??0, s=counts[k]||0, ec=s-b;
+      const b=refCounts[k]??0, s=counts[k]||0, ec=s-b;
       let evo;
-      if(b>0){ const p=Math.round((s-b)/b*100); evo=p>0?`🔺 +${p}%`:p<0?`🔽 ${p}%`:"➖ stable"; }
+      if(!refDate) evo='<span style="color:#94a3b8">—</span>';
+      else if(b>0){ const p=Math.round((s-b)/b*100); evo=p>0?`🔺 +${p}%`:p<0?`🔽 ${p}%`:"➖ stable"; }
       else evo=s>0?"🆕 nouveau":"➖";
-      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td><b>${b}</b></td><td><b style="color:${d.c}">${fmtN(s)}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${evo}</td></tr>`;
+      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td><b>${fmtN(b)}</b></td><td><b style="color:${d.c}">${fmtN(s)}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${evo}</td></tr>`;
     }).join("");
-  }
-  // snapshots locaux (cliquer = choisir comme référence de mesure)
-  const snapsEl=$("#ovSnaps tbody");
-  if(snapsEl){
-    const snaps=overdueSnapshots();
-    snapsEl.innerHTML=snaps.map((s,i)=>{ const tot=Object.values(s.counts||{}).reduce((a,n)=>a+(+n||0),0); const sel=S.ovRef?.type==="snap"&&S.ovRef.date===s.date&&(S.ovRef.file||"")===(s.file||""); return `<tr data-snap="${i}" style="cursor:pointer${sel?";background:#e8f3ff":""}" title="Choisir comme référence de mesure"><td><b>${esc(s.date)}</b>${sel?' <span class="pill info">réf.</span>':""}</td><td>${esc(s.pilot||"—")}</td><td>${esc((s.file||"").slice(0,22))}</td><td><b>${fmtN(tot)}</b></td><td>${s.counts.L1??""}</td><td>${s.counts.L2??""}</td><td>${s.counts.L3??""}</td><td>${s.counts.L4??""}</td><td>${s.counts.L5??""}</td><td>${s.counts.L6??""}</td><td>${s.counts.L7??""}</td><td>${s.counts.L8??""}</td><td>${s.counts.L9??""}</td></tr>`; }).join("")||'<tr><td colspan="13" style="text-align:center;color:#64748b">Aucun snapshot — cliquez 📸 Snapshot extraction après chaque chargement pour suivre l’avancement.</td></tr>';
-    $$("#ovSnaps tbody tr[data-snap]").forEach(tr=>tr.onclick=()=>{ setOvRefFromSnap(overdueSnapshots()[+tr.dataset.snap]); renderOverdue(); toast(`📏 Référence de mesure : <b>${esc(getOvRef().label)}</b>`); });
   }
   // par COM (respecte les filtres globaux pour rester cohérent avec les autres vues)
   const perCom={};
@@ -796,13 +791,13 @@ function renderOverdue(){
     ct.innerHTML=arr.map(([k,v])=>`<tr><td><b style="cursor:pointer;color:#0f2a52" data-ovcom="${esc(k)}">${esc(k)}</b></td><td><b>${v.n}</b></td><td>${v.L1||""}</td><td>${v.L2||""}</td><td>${v.L3||""}</td><td>${v.L4||""}</td><td>${v.L5||""}</td><td>${v.L6||""}</td><td>${v.L7||""}</td><td>${v.L8||""}</td><td>${v.L9||""}</td></tr>`).join("")||'<tr><td colspan="11" style="text-align:center;color:#64748b">Chargez l\'Excel pour voir les COM Hinterland.</td></tr>';
     $$("#ovComTable [data-ovcom]").forEach(el=>el.onclick=()=>{ S.ovCom=el.dataset.ovcom; const s=$("#ovCom"); if(s) s.value=S.ovCom; S.ovPage=0; renderOverdue(); goto("overdue"); });
   }
-  // calibration vs référence de mesure
-  const calRefTh=$("#ovCalibRefTh"); if(calRefTh) calRefTh.textContent=ref.label;
+  // calibration vs référence recalculée par le système
+  const calRefTh=$("#ovCalibRefTh"); if(calRefTh) calRefTh.textContent=refLabel;
   const cal=$("#ovCalib tbody");
   if(cal){
     cal.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-      const s=counts[k]||0, rvc=ref.counts[k]??0, ec=s-rvc;
-      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td><b>&gt; ${OVERDUE.days[k]}j</b></td><td><b>${fmtN(s)}</b></td><td>${rvc}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
+      const s=counts[k]||0, rvc=refCounts[k]??0, ec=s-rvc;
+      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td><b>&gt; ${OVERDUE.days[k]}j</b></td><td><b>${fmtN(s)}</b></td><td>${fmtN(rvc)}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
     }).join("");
   }
   // table dossiers
@@ -1063,13 +1058,13 @@ function renderBU(){
 function renderMethodo(){
   $("#methodoBody").innerHTML=`
   <h4>1. Chaîne process & ordre attendu</h4>
-  <p><code>Validation → Docs → Note → Douane → Facture douane → BAE → Mise → Retour → Facture intervention → Validation finale → Archivage</code>. La préparation peut précéder l'arrivée réelle. A3 vérifie uniquement l'ordre des jalons du process, sans imposer RTA avant validation.</p>
+  <p><code>Validation → Docs → Note → Douane → Facture douane → BAE → Mise → Retour → Facture intervention → Validation finale → Archivage</code>. La préparation peut précéder l'arrivée réelle. A3 vérifie l'ordre des jalons avec une tolérance de saisie (jours réglables) ; la facturation anticipée après mise/retour est une pratique acceptée, pas une inversion.</p>
   <h4>2. ETA estimative / RTA réelle (pilotage = ${esc($("#pilotDate").value||CFG.pilot)})</h4><p>Une ETA passée indique une prévision échue, pas une arrivée confirmée. La RTA est l'arrivée réelle. <code>RTA − ETA</code> mesure l'avance (négatif) ou le retard (positif) d'arrivée. Les temps de traitement se calculent séparément entre jalons réellement renseignés.</p>
   <h4>3. SLA par transition (jours, réglables)</h4>
-  <p>${Object.entries(CFG.sla).map(([k,v])=>`${k} <b>${v}j</b>`).join(" • ")}. Dépassement = stagnation, alertes A4/A5/A7/A8.</p>
+  <p>${Object.entries(CFG.sla).map(([k,v])=>`${k} <b>${v}j</b>`).join(" • ")}. Seules les stagnations <b>en cours</b> déclenchent A4 (l'historique écoulé reste visible sans points). A5/A6/A7/A8/A11/A12 se déclenchent sur l'ancienneté du blocage (seuils jours réglables) ; l'alerte la plus précise l'emporte (A11 prime A7, A12 prime A8).</p>
   <h4>4. Alertes actives (poids et sévérités réglables)</h4>
   <p>${Object.entries(CFG.alerts).filter(([,d])=>d.on!==false&&!d.deleted).map(([k,d])=>`<code>${k}</code> ${esc(d.ico||"")} <b>${esc(d.t)}</b> (${d.sev}, +${d.w}) — ${esc(d.h)}`).join("<br>")}</p>
-  <h4>5. Score de criticité 0–100</h4><p>Somme des poids${" "}• bonus retard &lt;−14j (+10) • ≥3 stagnations (+10). Seuils : <code>≥${CFG.thCrit} Critique</code> • <code>≥${CFG.thHaute} Haute</code> • <code>≥${CFG.thMoy} Moyenne</code> • sinon OK.</p>
+  <h4>5. Score de criticité 0–100</h4><p>Somme des poids des blocages <b>en cours</b> (l'ancienneté est déjà portée par les seuils de chaque règle, sans double comptage). Seuils : <code>≥${CFG.thCrit} Critique</code> (point dur douane + ETA compromise) • <code>≥${CFG.thHaute} Haute</code> (flux à traiter) • <code>≥${CFG.thMoy} Moyenne</code> (stock à solder) • sinon OK.</p>
   <h4>6. Mapping intelligent</h4><p>Normalisation (minuscules, sans accents, espaces) + dictionnaire ~60 synonymes FR/EN. Score 0–100, pastille verte/orange/rouge. Modifiable avant analyse, mémorisé en local. Dates : serial Excel + JJ/MM/AAAA + ISO.</p>
   <h4>7. Confidentialité</h4><p>Lecture Excel via SheetJS <b>dans le navigateur</b>, stockage <b>IndexedDB + localStorage</b> sur ce poste uniquement. E-mails via <code>mailto</code> (votre messagerie). Déploiement Vercel/GitHub = fichiers statiques.</p>`;
 }
@@ -1088,7 +1083,7 @@ function renderAdmin(){
   $("#cfgEtaCrit").value=CFG.etaCrit; $("#cfgRtaCrit").value=CFG.rtaCrit;
   const slaLabels={validation:"Valid→Docs",docs:"Docs→Note",note:"Note→Enreg",douane:"Enreg→Fact",factDouane:"Fact→BAE",bae:"BAE→Mise",mise:"Mise→Retour",retour:"Retour→FactInt",factInt:"FactInt→ValidFin",validFinal:"ValidFin→Archiv"};
   $("#cfgSlaGrid").innerHTML=Object.keys(SLA_DEFAULT).map(k=>`<div class="f-field"><label>${slaLabels[k]} (j)</label><input type="number" min="0" max="60" data-sla="${k}" value="${CFG.sla[k]}"></div>`).join("");
-  $("#cfgAlertTable tbody").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<tr><td><b>${k}</b> ${d.ico||""}</td><td><b>${esc(d.t)}</b><br><small style="color:#64748b">${esc(d.h)}</small></td><td><input type="checkbox" data-on="${k}" ${d.on!==false?"checked":""} style="width:18px;height:18px"></td><td><select data-sev="${k}">${["Critique","Haute","Moyenne"].map(s=>`<option ${d.sev===s?"selected":""}>${s}</option>`).join("")}</select></td><td><input type="number" min="0" max="50" data-w="${k}" value="${d.w}"></td><td><input type="number" min="0" max="90" data-days="${k}" value="${d.days}" title="Seuil jours (A6/A7/A8/A9)"></td><td><input type="color" class="cfg-color" data-col="${k}" value="${d.c}"></td></tr>`).join("");
+  $("#cfgAlertTable tbody").innerHTML=Object.entries(CFG.alerts).map(([k,d])=>`<tr><td><b>${k}</b> ${d.ico||""}</td><td><b>${esc(d.t)}</b><br><small style="color:#64748b">${esc(d.h)}</small></td><td><input type="checkbox" data-on="${k}" ${d.on!==false?"checked":""} style="width:18px;height:18px"></td><td><select data-sev="${k}">${["Critique","Haute","Moyenne"].map(s=>`<option ${d.sev===s?"selected":""}>${s}</option>`).join("")}</select></td><td><input type="number" min="0" max="50" data-w="${k}" value="${d.w}"></td><td><input type="number" min="0" max="90" data-days="${k}" value="${d.days}" title="Seuil jours (ancienneté du blocage ; A3 = tolérance d'inversion ; A9 = % de dossiers)"></td><td><input type="color" class="cfg-color" data-col="${k}" value="${d.c}"></td></tr>`).join("");
   $("#cfgSevColors").innerHTML=["Critique","Haute","Moyenne","OK"].map(s=>`<div class="f-field"><label>${s}</label><div style="display:flex;gap:8px;align-items:center"><input type="color" class="cfg-color" data-sevc="${s}" value="${CFG.sevColors[s]}"><b>${S.enriched.filter(r=>r.crit===s).length} dossiers</b></div></div>`).join("");
   $$("#cfgAlertTable tbody tr").forEach(row=>{const input=row.querySelector("[data-on]");if(input&&CFG.alerts[input.dataset.on]?.deleted)row.remove();});
   const ovLabels={L1:"L1 BAE",L2:"L2 FactDouane",L3:"L3 Mise",L4:"L4 Décharg",L5:"L5 Restitution",L6:"L6 Déclarés s/fact",L7:"L7 FactPrest",L8:"L8 Archivage",L9:"L9 Sans déclar"};
@@ -1225,13 +1220,13 @@ function renderGuide(){
   el.innerHTML=`
   <div class="guide-step"><b>1. Charger l'Excel du jour (1 min).</b> 📤 <i>Charger Excel</i> ou glisser-déposer <code>Dossiers par COM.xlsx</code> (aucune donnée d'exemple : seuls vos dossiers s'affichent). Vérifiez le mapping auto (pastilles vertes), Valider. Intégralité des lignes conservée.</div>
   <div class="guide-step"><b>2. Régler le jour de pilotage.</b> En haut 📅 <code>${esc($("#pilotDate").value||CFG.pilot)}</code> ou boutons <code>Auj.</code> / <code>−1j</code> / <code>+1j</code>, ou dans <b>Administration</b>. Tout (délais ETA/RTA, SLA, alertes, scores) est <b>recalculé instantanément</b>.</div>
-  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité, <b>Types d'alerte 🚨</b>) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le sélecteur <b>🚨 Types d'alerte</b> permet de n'afficher qu'<b>un ou plusieurs types</b> (A1…A10, cases à cocher) dans les listes ; vide = tous visibles. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
+  <div class="guide-step"><b>3. Filtrer partout.</b> La barre <b>🔎 Filtres globaux</b> (COM, Métier, <b>Mois/Année ETA</b>, Criticité, <b>Types d'alerte 🚨</b>) s'applique à <b>toutes les vues</b> : pilotage du mois, synthèse, alertes, dossiers, COM, BU. Le sélecteur <b>🚨 Types d'alerte</b> permet de n'afficher qu'<b>un ou plusieurs types</b> (A1…A12, cases à cocher) dans les listes ; vide = tous visibles. Chaque vue garde ses filtres propres en plus (recherche, délais, étapes, tri). <i>Effacer</i> réinitialise tout.</div>
   <div class="guide-step"><b>3bis. Dashboard Pilotage du mois (accueil).</b> Vue simple et claire centrée sur <b>le mois</b> (sélecteur + ← → + <i>Mois du jour J</i>) avec ses propres filtres <b>COM / Métier / Mois / Année / Criticité</b> (synchronisés avec la barre globale) + <b>filtres de dates : mois/année RTA, période ETA du…au…</b> : KPIs du mois, sévérités, COM du mois, étapes bloquantes, top priorités — <b>tout est cliquable</b> (un clic applique les filtres et ouvre la bonne vue).</div>
   <div class="guide-step"><b>3. Lire les indicateurs.</b> Cartes <code>🔴 Critique / 🟠 Haute / 🟡 Moyenne / 🟢 OK</code> en Vue d'ensemble : <b>cliquez</b> pour voir les alertes. Tableau <b>Cas préoccupants</b> : clic = fiche dossier, commentaires surlignés (RFCV, BL, BAE…).</div>
-  <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A10</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
+  <div class="guide-step"><b>4. Traiter les alertes.</b> Onglet Alertes → cliquez une carte <code>A1…A12</code> (ex : A6 Blocage BAE), filtrez par COM / Métier / <b>mois-année</b>, ouvrez la fiche : <b>🗓 positionnement dates</b> (chaque jalon situé en J±n sur un axe), timeline, stagnations &gt; SLA, commentaires C1–C5.</div>
   <div class="guide-step"><b>5. Piloter par COM.</b> Performance COM : classement <b>complet</b> + <b>panneau détail</b> (KPIs, criticité, alertes dominantes, volume mensuel <b>complet</b>, <b>délais moyens entre étapes vs SLA</b>, top dossiers). 👁 voir dossiers, ⬇ CSV/XLSX du COM, ✉️ e-mail.</div>
   <div class="guide-step"><b>6. Exporter sans limite.</b> <b>Toutes les listes sont intégrales</b> (COM, métiers, clients, mois, matrice BU) ; seuls les tableaux de dossiers/alertes sont <b>paginés</b> (100 à 1000 lignes/page réglables) pour rester fluides. Exports <code>CSV / XLSX / JSON</code> : volume complet, compteur annoncé, aucune troncature.</div>
-  <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A10, activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
+  <div class="guide-step"><b>7. Régler les seuils.</b> <b>Administration</b> : SLA par étape, seuils ETA/RTA critiques (défaut ${CFG.etaCrit}j), poids et sévérités A1–A12 (A5 = facture douane, A11 = restitution, A12 = facture prestation), activation on/off, couleurs. 💾 Enregistrer → recalcul immédiat. ↩ Défaut pour réinitialiser.</div>
   <div class="guide-step"><b>8. Rituel quotidien conseillé (10 min).</b> Charger Excel → vérifier date → lire indicateurs → traiter 🔴 puis 🟠 → envoyer situations COM en difficulté → exporter la sélection du jour.</div>
   <div class="footer-note">💡 Astuce : épinglez les dossiers suivis (onglet <b>Épinglés</b>), ajoutez vos notes, puis générez un rapport cadré via 🧭 <b>Rapport</b> (Excel mis en forme ou Word structuré).</div>`;
 }
@@ -1246,11 +1241,11 @@ function openDrawer(i){
   $("#dTitle").textContent="Dossier "+(r.dossier||"—");
   $("#dSub").innerHTML=`${esc(r.com||"—")} • ${esc(r.client||"—")} • ${esc(r.designation||"")} • ETA ${fmtD(r.dateETA)} (${r.delaiETA??"—"}j) • RTA ${fmtD(r.dateRTA)} (${r.delaiRTA??"—"}j)`;
   const stepRow=(l,d,extra)=>{ const done=!!d; const late=extra&&extra.late; return `<div class="t-step ${done?(late?"late-step":"done"):"todo"}"><b>${l}</b><div>${done?fmtD(d)+(extra?.txt?" — "+extra.txt:""):"En attente"}</div></div>`; };
-  const invTxt=r.inv.length?`<div class="footer-note">⚠ <b>Inversions :</b> ${esc(r.inv.join(" ; "))}</div>`:"";
+  const invTxt=r.inv.length?`<div class="footer-note">⚠ <b>Inversions :</b> ${esc(r.inv.map(x=>typeof x==="string"?x:x.t).join(" ; "))}<br><small style="color:#64748b">Tolérance saisie : ${CFG.alerts.A3?.days??2}j • facturation anticipée après mise/retour acceptée.</small></div>`:"";
   const stagTxt=r.stagn.length?`<div class="footer-note">⏱ <b>Stagnations &gt; SLA :</b> ${esc(r.stagn.map(s=>s.label+" "+s.jours+"j").join(" • "))}</div>`:"";
   $("#dBody").innerHTML=`
     <div class="chips" style="margin-bottom:8px">${r.alerts.map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}">${a.c}</span>`).join("")||'<span class="pill ok">Aucune alerte</span>'}</div>
-    ${r.alerts.map(a=>`<div style="background:${a.c==="A1"||a.c==="A3"||a.c==="A6"?"#fdecec":"#fff7ed"};border:1px solid #f0d9c8;border-radius:10px;padding:8px 10px;margin-bottom:6px"><b>${a.c} — ${esc(ALERT_DEFS[a.c].t)}</b><br><span style="font-size:12.5px">${esc(a.d)}</span></div>`).join("")}
+    ${r.alerts.map(a=>`<div style="background:${(alertDef(a.c)?.sev||"Moyenne")==="Critique"?"#fdecec":"#fff7ed"};border:1px solid #f0d9c8;border-radius:10px;padding:8px 10px;margin-bottom:6px"><b>${a.c} — ${esc(alertDef(a.c).t)}</b><br><span style="font-size:12.5px">${esc(a.d)}</span></div>`).join("")}
     ${invTxt}${stagTxt}
     <h4 style="margin:12px 0 4px">🗓 Positionnement dates — jalons situés vs jour J (${fmtD(todayPilot())})</h4>
     ${datePositionHTML(r)}
@@ -1492,7 +1487,7 @@ function openMailModal(com){
 
 /* ---------- Init ---------- */
 async function init(){
-  loadCfg(); loadOverdue(); loadOvRef(); applySevColors();
+  loadCfg(); loadOverdue(); loadOvRefDate(); applySevColors();
   if(CFG.pilot) $("#pilotDate").value=CFG.pilot;
   renderMethodo(); renderGuide(); renderAdmin();
   $$(".nav-btn").forEach(b=>b.onclick=()=>goto(b.dataset.view));
@@ -1506,19 +1501,13 @@ async function init(){
   $("#btnPlus1").onclick=()=>{ const d=todayPilot(); d.setDate(d.getDate()+1); setPilot(iso(d)); };
   // admin
   $("#cfgSave").onclick=()=>{try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);applyCfgAndRerender("Réglages enregistrés · alertes recalculées");}catch(err){toast(esc(err.message));}};
-  $("#cfgReset").onclick=()=>{ if(!confirm("Réinitialiser tous les réglages ?"))return; CFG=JSON.parse(JSON.stringify(DEFAULT_CFG)); OVERDUE=JSON.parse(JSON.stringify(OVERDUE_DEFAULT)); saveOverdue(); S.ovRef={key:"ref3009"}; saveOvRef(); applyCfgAndRerender("↩ Réglages par défaut restaurés"); };
+  $("#cfgReset").onclick=()=>{ if(!confirm("Réinitialiser tous les réglages ?"))return; CFG=JSON.parse(JSON.stringify(DEFAULT_CFG)); OVERDUE=JSON.parse(JSON.stringify(OVERDUE_DEFAULT)); saveOverdue(); S.ovRefDate=OV_REF_DEFAULT; saveOvRefDate(); applyCfgAndRerender("↩ Réglages par défaut restaurés"); };
   $("#cfgToday").onclick=()=>{ $("#cfgPilot").value=iso(new Date()); };
   $("#cfgReport").onclick=()=>{ $("#cfgPilot").value="2026-09-28"; };
   $("#guidePrint").onclick=()=>window.print();
-  // overdue : filtres locaux de la vue + référence de mesure manuelle
-  const ovRefSel=$("#ovRef"); if(ovRefSel) ovRefSel.onchange=e=>{
-    const v=e.target.value;
-    if(v.startsWith("snap:")){
-      if(v!=="snap:frozen") setOvRefFromSnap(overdueSnapshots()[+v.slice(5)]);
-    } else S.ovRef={key:v};
-    saveOvRef(); S.ovPage=0; renderOverdue();
-    toast(`📏 Référence de mesure : <b>${esc(getOvRef().label)}</b>`);
-  };
+  // overdue : date de référence manuelle (écart recalculé par le système)
+  const ovRefDateEl=$("#ovRefDate"); if(ovRefDateEl) ovRefDateEl.onchange=e=>{ S.ovRefDate=e.target.value; saveOvRefDate(); S.ovPage=0; renderOverdue(); toast(`📏 Référence de mesure : <b>${esc(ovRefLabel())}</b> — écart recalculé`); };
+  $$("[data-refdate]").forEach(b=>b.onclick=()=>{ S.ovRefDate=b.dataset.refdate; saveOvRefDate(); S.ovPage=0; renderOverdue(); toast(`📏 Référence de mesure : <b>${esc(ovRefLabel())}</b>`); });
   const ovComEl=$("#ovCom"); if(ovComEl) ovComEl.onchange=e=>{ S.ovCom=e.target.value; S.ovPage=0; renderOverdue(); };
   const ovClientEl=$("#ovClient"); if(ovClientEl) ovClientEl.onchange=e=>{ S.ovClient=e.target.value; S.ovPage=0; renderOverdue(); };
   const ovQ=$("#ovSearch"); if(ovQ) ovQ.addEventListener("input",e=>{ S.ovQ=e.target.value; S.ovPage=0; renderOverdue(); });
@@ -1531,8 +1520,7 @@ async function init(){
   const ovClear=$("#ovClear"); if(ovClear) ovClear.onclick=()=>{ S.ovCom=""; S.ovClient=""; S.ovQ=""; S.ovCat=""; S.ovSev=""; S.ovMinAge=""; S.ovEta1=""; S.ovEta2=""; S.ovSort="age"; S.ovPage=0; const q=$("#ovSearch"); if(q) q.value=""; const m=$("#ovMinAge"); if(m) m.value=""; const a=$("#ovEta1"); if(a) a.value=""; const b=$("#ovEta2"); if(b) b.value=""; renderOverdue(); toast("Filtres Overdue réinitialisés"); };
   const ovPrev=$("#ovPrev"); if(ovPrev) ovPrev.onclick=()=>{ S.ovPage=Math.max(0,S.ovPage-1); renderOverdue(); };
   const ovNext=$("#ovNext"); if(ovNext) ovNext.onclick=()=>{ S.ovPage++; renderOverdue(); };
-  const ovSnap=$("#ovSnapshot"); if(ovSnap) ovSnap.onclick=overdueTakeSnapshot;
-  const ovExp=$("#ovExport"); if(ovExp) ovExp.onclick=()=>{ const r=overdueFiltered(); download("spot_overdue.csv",[overdueToCSV(r)],"text/csv"); toast(`⬇ Overdue exporté : <b>${r.length} dossiers</b>`); };
+  const ovExp=$("#ovExport"); if(ovExp) ovExp.onclick=()=>{ const r=overdueFiltered(); download("spot_overdue.csv",[overdueToCSV(r)],"text/csv"); toast(`⬇ Overdue exporté : <b>${fmtN(r.length)} dossiers</b>`); };
   const ovExpX=$("#ovExportX"); if(ovExpX) ovExpX.onclick=()=>{ const r=overdueFiltered(); exportXLSX("spot_overdue.xlsx",r.map(x=>({...x.r,overdueCat:x.o.c,overdueMiss:x.o.miss,overdueAge:x.o.age}))); };
   // dashboard pilotage du mois
   $("#pilMonth").onchange=e=>setF("month",e.target.value);
