@@ -120,7 +120,7 @@ const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
 /* ---------- État ---------- */
-const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"", ovCom:"", ovClient:"", ovQ:"", ovCat:"", ovSev:"", ovMinAge:"", ovEta1:"", ovEta2:"", ovSort:"age", ovPage:0 };
+const S = { rows:[], enriched:[], mapping:null, headers:[], fileName:"", alertFilter:null, sevFilter:"", sortMain:{k:"crit",dir:-1}, sortAlert:{k:"crit",dir:-1}, pageMain:0, pageAlert:0, perPage:100, activeView:"pilotage", selCom:"", pilMonth:"", pins:{}, notes:{}, pinSel:new Set(), pinQ:"", pinSort:"score", selClient:"", clientQ:"", ovCom:"", ovClient:"", ovQ:"", ovCat:"", ovSev:"", ovMinAge:"", ovEta1:"", ovEta2:"", ovSort:"age", ovPage:0, ovRef:null };
 /* Filtres globaux — appliqués à toutes les vues */
 const F = { com:"", metier:"", crit:"", month:"", year:"", rtaMonth:"", rtaYear:"", dFrom:"", dTo:"", alertTypes:[], clients:[], hideArchived:false };
 /* Préférences persistantes (toggles) */
@@ -359,6 +359,20 @@ function overdueFiltered(){
 }
 function overdueSnapshots(){
   try{ return JSON.parse(localStorage.getItem("spot_overdue_snaps")||"[]"); }catch{ return []; }
+}
+/* Référence de mesure manuelle : preset 21/09, preset 30/09 ou snapshot figé */
+function getOvRef(){
+  const r=S.ovRef;
+  if(r&&r.type==="snap"&&r.counts) return {label:r.label||("Snapshot "+(r.date||"")), counts:r.counts};
+  if(r&&r.key==="ref2109") return {label:"Réf. 21/09", counts:OVERDUE_REF_2109};
+  return {label:"Réf. 30/09", counts:OVERDUE_REF_3009};
+}
+function saveOvRef(){ try{ localStorage.setItem("spot_ovref", JSON.stringify(S.ovRef||{key:"ref3009"})); }catch{} }
+function loadOvRef(){ try{ const o=JSON.parse(localStorage.getItem("spot_ovref")||"null"); if(o&&(o.key==="ref2109"||o.key==="ref3009"||(o.type==="snap"&&o.counts))) S.ovRef=o; }catch{} if(!S.ovRef) S.ovRef={key:"ref3009"}; }
+function setOvRefFromSnap(s){
+  if(!s) return;
+  S.ovRef={type:"snap", date:s.date, file:s.file||"", label:"Snapshot "+s.date, counts:{...s.counts}};
+  saveOvRef();
 }
 function overdueSaveSnapshots(a){ try{ localStorage.setItem("spot_overdue_snaps",JSON.stringify(a)); }catch{} }
 function overdueTakeSnapshot(){
@@ -718,12 +732,26 @@ function renderOverdue(){
   const counts=overdueCounts();
   const total=Object.values(counts).reduce((s,n)=>s+n,0);
   const nav=$("#navOverdueCount"); if(nav) nav.textContent=total;
+  const ref=getOvRef();
   cardsEl.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-    const n=counts[k]||0, ref=OVERDUE_REF_3009[k]??"—", ec=n-(OVERDUE_REF_3009[k]??n);
+    const n=counts[k]||0, rvc=ref.counts[k]??0, ec=n-rvc;
     const active=S.ovCat===k?" active":"";
     const ecTxt=ec===0?"= réf.":(ec>0?`+${ec}`:`${ec}`);
-    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">réf. 30/09 : ${ref} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
+    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">${esc(ref.label)} : ${rvc} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
   }).join("");
+  // sélecteur de référence de mesure : presets + snapshots
+  const ovRefSel=$("#ovRef");
+  if(ovRefSel){
+    const snaps=overdueSnapshots();
+    ovRefSel.innerHTML=`<option value="ref2109">Réf. 21/09</option><option value="ref3009">Réf. 30/09</option>`+snaps.map((s,i)=>`<option value="snap:${i}">Snapshot ${esc(s.date)}${s.file?" — "+esc(s.file.slice(0,18)):""}</option>`).join("");
+    let cur="ref3009";
+    if(S.ovRef?.type==="snap"){
+      const idx=snaps.findIndex(s=>s.date===(S.ovRef.date||"")&&(s.file||"")===(S.ovRef.file||""));
+      if(idx>=0) cur="snap:"+idx;
+      else { if(!ovRefSel.querySelector('[value="snap:frozen"]')){ const o=document.createElement("option"); o.value="snap:frozen"; o.textContent=(S.ovRef.label||"Snapshot")+" (figée)"; ovRefSel.appendChild(o); } cur="snap:frozen"; }
+    } else cur=S.ovRef?.key||"ref3009";
+    ovRefSel.value=cur;
+  }
   $$("#ovCards [data-ov]").forEach(el=>el.onclick=()=>{ S.ovCat=S.ovCat===el.dataset.ov?"":el.dataset.ov; const sel=$("#ovCat"); if(sel) sel.value=S.ovCat; S.ovPage=0; renderOverdue(); });
   // sélecteurs : choix reconstruits à chaque rendu pour rester cohérents avec le fichier chargé
   const inPerim=S.enriched.filter(overdueInPerim);
@@ -740,22 +768,24 @@ function renderOverdue(){
   const ovMinAge=$("#ovMinAge"); if(ovMinAge&&document.activeElement!==ovMinAge) ovMinAge.value=S.ovMinAge||"";
   const ovEta1=$("#ovEta1"); if(ovEta1&&!S.ovEta1) ovEta1.value=""; if(ovEta1&&S.ovEta1) ovEta1.value=S.ovEta1;
   const ovEta2=$("#ovEta2"); if(ovEta2&&!S.ovEta2) ovEta2.value=""; if(ovEta2&&S.ovEta2) ovEta2.value=S.ovEta2;
-  // suivi 21/09 vs 30/09 vs SPOT
+  // suivi : mesure du jour vs référence manuelle
+  const refTh=$("#ovRefTh"); if(refTh) refTh.textContent=ref.label;
   const tb=$("#ovFollow tbody");
   if(tb){
     tb.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-      const a=OVERDUE_REF_2109[k]??"—", b=OVERDUE_REF_3009[k]??"—", s=counts[k]||0;
-      const ec=s-(OVERDUE_REF_3009[k]??s);
-      const trend=(OVERDUE_REF_3009[k]??0)-(OVERDUE_REF_2109[k]??0);
-      const tTxt=trend>0?`🔺 +${trend}`:trend<0?`🔽 ${trend}`:"➖ stable";
-      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td>${a}</td><td><b>${b}</b></td><td><b style="color:${d.c}">${s}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${tTxt}</td></tr>`;
+      const b=ref.counts[k]??0, s=counts[k]||0, ec=s-b;
+      let evo;
+      if(b>0){ const p=Math.round((s-b)/b*100); evo=p>0?`🔺 +${p}%`:p<0?`🔽 ${p}%`:"➖ stable"; }
+      else evo=s>0?"🆕 nouveau":"➖";
+      return `<tr><td><b>${k}</b> ${esc(d.t)}</td><td><b>${b}</b></td><td><b style="color:${d.c}">${fmtN(s)}</b></td><td style="color:${ec===0?"#12805c":"#b45309"}"><b>${ec===0?"= OK":(ec>0?`+${ec}`:ec)}</b></td><td>${evo}</td></tr>`;
     }).join("");
   }
-  // snapshots locaux
+  // snapshots locaux (cliquer = choisir comme référence de mesure)
   const snapsEl=$("#ovSnaps tbody");
   if(snapsEl){
     const snaps=overdueSnapshots();
-    snapsEl.innerHTML=snaps.map((s,i)=>{ const tot=Object.values(s.counts||{}).reduce((a,n)=>a+(+n||0),0); return `<tr><td><b>${esc(s.date)}</b></td><td>${esc(s.pilot||"—")}</td><td>${esc((s.file||"").slice(0,22))}</td><td><b>${tot}</b></td><td>${s.counts.L1??""}</td><td>${s.counts.L2??""}</td><td>${s.counts.L3??""}</td><td>${s.counts.L4??""}</td><td>${s.counts.L5??""}</td><td>${s.counts.L6??""}</td><td>${s.counts.L7??""}</td><td>${s.counts.L8??""}</td><td>${s.counts.L9??""}</td></tr>`; }).join("")||'<tr><td colspan="13" style="text-align:center;color:#64748b">Aucun snapshot — cliquez 📸 Snapshot extraction après chaque chargement pour suivre l’avancement.</td></tr>';
+    snapsEl.innerHTML=snaps.map((s,i)=>{ const tot=Object.values(s.counts||{}).reduce((a,n)=>a+(+n||0),0); const sel=S.ovRef?.type==="snap"&&S.ovRef.date===s.date&&(S.ovRef.file||"")===(s.file||""); return `<tr data-snap="${i}" style="cursor:pointer${sel?";background:#e8f3ff":""}" title="Choisir comme référence de mesure"><td><b>${esc(s.date)}</b>${sel?' <span class="pill info">réf.</span>':""}</td><td>${esc(s.pilot||"—")}</td><td>${esc((s.file||"").slice(0,22))}</td><td><b>${fmtN(tot)}</b></td><td>${s.counts.L1??""}</td><td>${s.counts.L2??""}</td><td>${s.counts.L3??""}</td><td>${s.counts.L4??""}</td><td>${s.counts.L5??""}</td><td>${s.counts.L6??""}</td><td>${s.counts.L7??""}</td><td>${s.counts.L8??""}</td><td>${s.counts.L9??""}</td></tr>`; }).join("")||'<tr><td colspan="13" style="text-align:center;color:#64748b">Aucun snapshot — cliquez 📸 Snapshot extraction après chaque chargement pour suivre l’avancement.</td></tr>';
+    $$("#ovSnaps tbody tr[data-snap]").forEach(tr=>tr.onclick=()=>{ setOvRefFromSnap(overdueSnapshots()[+tr.dataset.snap]); renderOverdue(); toast(`📏 Référence de mesure : <b>${esc(getOvRef().label)}</b>`); });
   }
   // par COM (respecte les filtres globaux pour rester cohérent avec les autres vues)
   const perCom={};
@@ -766,12 +796,13 @@ function renderOverdue(){
     ct.innerHTML=arr.map(([k,v])=>`<tr><td><b style="cursor:pointer;color:#0f2a52" data-ovcom="${esc(k)}">${esc(k)}</b></td><td><b>${v.n}</b></td><td>${v.L1||""}</td><td>${v.L2||""}</td><td>${v.L3||""}</td><td>${v.L4||""}</td><td>${v.L5||""}</td><td>${v.L6||""}</td><td>${v.L7||""}</td><td>${v.L8||""}</td><td>${v.L9||""}</td></tr>`).join("")||'<tr><td colspan="11" style="text-align:center;color:#64748b">Chargez l\'Excel pour voir les COM Hinterland.</td></tr>';
     $$("#ovComTable [data-ovcom]").forEach(el=>el.onclick=()=>{ S.ovCom=el.dataset.ovcom; const s=$("#ovCom"); if(s) s.value=S.ovCom; S.ovPage=0; renderOverdue(); goto("overdue"); });
   }
-  // calibration
+  // calibration vs référence de mesure
+  const calRefTh=$("#ovCalibRefTh"); if(calRefTh) calRefTh.textContent=ref.label;
   const cal=$("#ovCalib tbody");
   if(cal){
     cal.innerHTML=Object.entries(OVERDUE_DEFS).map(([k,d])=>{
-      const s=counts[k]||0, ref=OVERDUE_REF_3009[k]??0, ec=s-ref;
-      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td><b>&gt; ${OVERDUE.days[k]}j</b></td><td><b>${s}</b></td><td>${ref}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
+      const s=counts[k]||0, rvc=ref.counts[k]??0, ec=s-rvc;
+      return `<tr><td><b>${k}</b></td><td>${esc(d.t)}<br><small style="color:#64748b">${esc(d.h)}</small></td><td><b>&gt; ${OVERDUE.days[k]}j</b></td><td><b>${fmtN(s)}</b></td><td>${rvc}</td><td style="color:${ec===0?"#12805c":Math.abs(ec)<=3?"#b45309":"#d92d20"}"><b>${ec===0?"✓ OK":(ec>0?`+${ec}`:ec)}</b></td></tr>`;
     }).join("");
   }
   // table dossiers
@@ -1461,7 +1492,7 @@ function openMailModal(com){
 
 /* ---------- Init ---------- */
 async function init(){
-  loadCfg(); loadOverdue(); applySevColors();
+  loadCfg(); loadOverdue(); loadOvRef(); applySevColors();
   if(CFG.pilot) $("#pilotDate").value=CFG.pilot;
   renderMethodo(); renderGuide(); renderAdmin();
   $$(".nav-btn").forEach(b=>b.onclick=()=>goto(b.dataset.view));
@@ -1475,11 +1506,19 @@ async function init(){
   $("#btnPlus1").onclick=()=>{ const d=todayPilot(); d.setDate(d.getDate()+1); setPilot(iso(d)); };
   // admin
   $("#cfgSave").onclick=()=>{try{collectAdmin();CFG=SpotSettings.validate(CFG,DEFAULT_CFG);applyCfgAndRerender("Réglages enregistrés · alertes recalculées");}catch(err){toast(esc(err.message));}};
-  $("#cfgReset").onclick=()=>{ if(!confirm("Réinitialiser tous les réglages ?"))return; CFG=JSON.parse(JSON.stringify(DEFAULT_CFG)); OVERDUE=JSON.parse(JSON.stringify(OVERDUE_DEFAULT)); saveOverdue(); applyCfgAndRerender("↩ Réglages par défaut restaurés"); };
+  $("#cfgReset").onclick=()=>{ if(!confirm("Réinitialiser tous les réglages ?"))return; CFG=JSON.parse(JSON.stringify(DEFAULT_CFG)); OVERDUE=JSON.parse(JSON.stringify(OVERDUE_DEFAULT)); saveOverdue(); S.ovRef={key:"ref3009"}; saveOvRef(); applyCfgAndRerender("↩ Réglages par défaut restaurés"); };
   $("#cfgToday").onclick=()=>{ $("#cfgPilot").value=iso(new Date()); };
   $("#cfgReport").onclick=()=>{ $("#cfgPilot").value="2026-09-28"; };
   $("#guidePrint").onclick=()=>window.print();
-  // overdue : filtres locaux de la vue
+  // overdue : filtres locaux de la vue + référence de mesure manuelle
+  const ovRefSel=$("#ovRef"); if(ovRefSel) ovRefSel.onchange=e=>{
+    const v=e.target.value;
+    if(v.startsWith("snap:")){
+      if(v!=="snap:frozen") setOvRefFromSnap(overdueSnapshots()[+v.slice(5)]);
+    } else S.ovRef={key:v};
+    saveOvRef(); S.ovPage=0; renderOverdue();
+    toast(`📏 Référence de mesure : <b>${esc(getOvRef().label)}</b>`);
+  };
   const ovComEl=$("#ovCom"); if(ovComEl) ovComEl.onchange=e=>{ S.ovCom=e.target.value; S.ovPage=0; renderOverdue(); };
   const ovClientEl=$("#ovClient"); if(ovClientEl) ovClientEl.onchange=e=>{ S.ovClient=e.target.value; S.ovPage=0; renderOverdue(); };
   const ovQ=$("#ovSearch"); if(ovQ) ovQ.addEventListener("input",e=>{ S.ovQ=e.target.value; S.ovPage=0; renderOverdue(); });
