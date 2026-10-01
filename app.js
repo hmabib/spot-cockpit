@@ -113,6 +113,9 @@ function excelToDate(v){
   return null;
 }
 const fmtD = d => d? d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+/* Nombres : séparateur de milliers = espace insécable classique (U+00A0), toujours visible.
+   (toLocaleString fr-FR utilise une espace fine U+202F qui s'affiche quasi invisible selon les polices/navigateurs.) */
+const fmtN = v => (v==null||!Number.isFinite(+v)) ? "—" : Number(v).toLocaleString("fr-FR").replace(/[\u202F\u2009]/g, "\u00A0");
 const diffJ = (a,b) => (!a||!b)?null:Math.round((a-b)/86400000);
 const todayPilot = () => { const v=$("#pilotDate").value; if(v){const d=new Date(v+"T00:00:00"); if(!isNaN(d)) return d;} const d=new Date(); d.setHours(0,0,0,0); return d; };
 
@@ -152,7 +155,7 @@ function setImportState(state,message){
   const hero=$("#heroBox");
   ["loaded","loading","error"].forEach(c=>hero.classList.toggle(c,c===state));
   $("#importState").textContent={loaded:"Fichier chargé",loading:"Import en cours",error:"Import à vérifier",empty:"En attente d’un fichier"}[state];
-  $("#importTitle").textContent=state==="loaded"?`${S.enriched.length.toLocaleString("fr-FR")} dossiers disponibles`:state==="loading"?"Préparation des dossiers":state==="error"?"L’import n’a pas abouti":"Importez vos dossiers";
+  $("#importTitle").textContent=state==="loaded"?`${fmtN(S.enriched.length)} dossiers disponibles`:state==="loading"?"Préparation des dossiers":state==="error"?"L’import n’a pas abouti":"Importez vos dossiers";
   $("#loadStatus").textContent=message||S.fileName||"Export « Dossiers par COM »";
   $("#importAction").textContent=S.enriched.length?"Remplacer le fichier":"Choisir un fichier";
 }
@@ -411,7 +414,7 @@ function fillSelects(){
   setSelect($("#alertMonth"),F.month); $("#alertMonth").innerHTML=optYM($("#alertMonth").value||F.month);
   setSelect($("#alertYear"),F.year); $("#alertYear").innerHTML='<option value="">Toutes</option>'+yrs.map(v=>{const cur=$("#alertYear").value||F.year;return `<option ${v===cur?"selected":""}>${v}</option>`;}).join("");
   const n=baseFiltered().length;
-  $("#gCount").textContent=n.toLocaleString("fr-FR")+" dossier"+(n>1?"s":"");
+  $("#gCount").textContent=fmtN(n)+" dossier"+(n>1?"s":"");
   /* mois du dashboard */
   const pm=$("#pilMonth");
   if(pm){ const cur=S.pilMonth; pm.innerHTML='<option value="">Tous les mois</option>'+yms.map(v=>`<option value="${v}" ${v===cur?"selected":""}>${esc(ymLabel(v))}</option>`).join(""); }
@@ -594,7 +597,7 @@ function renderKPIs(){
   ];
   $("#gaugeGrid").innerHTML=g.map(x=>`<div class="gauge-card"><h4>${x.t}</h4>${gaugeSVG(x.p,x.c)}<p>${x.h}</p></div>`).join("");
   $("#navAlertCount").textContent=E.reduce((s,r)=>s+visibleAlerts(r).length,0);
-  const gc=$("#gCount"); if(gc) gc.textContent=tot.toLocaleString("fr-FR")+" dossier"+(tot>1?"s":"")+" (filtres globaux)";
+  const gc=$("#gCount"); if(gc) gc.textContent=fmtN(tot)+" dossier"+(tot>1?"s":"")+" (filtres globaux)";
   renderSevGrid();
   renderWorry();
 }
@@ -606,7 +609,7 @@ function renderSevGrid(){
     const n=E.filter(r=>r.crit===sev).length;
     const col=sevColor(sev);
     const active=S.sevFilter===sev?" active":"";
-    return `<button class="sev-card${active}" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${n.toLocaleString("fr-FR")}</b><span>${h}</span></span><span style="font-size:18px;color:${col}">→</span></button>`;
+    return `<button class="sev-card${active}" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${fmtN(n)}</b><span>${h}</span></span><span style="font-size:18px;color:${col}">→</span></button>`;
   }).join("");
   $$("#sevGrid .sev-card").forEach(b=>b.onclick=()=>{
     if(b.dataset.sev==="OK"){ setF("crit","OK"); goto("dossiers"); return; }
@@ -649,7 +652,7 @@ function renderPilotage(){
   const groups=[["Critique","🔴"],["Haute","🟠"],["Moyenne","🟡"],["OK","🟢"]];
   $("#pilSev").innerHTML=groups.map(([sev,ico])=>{
     const n=E.filter(r=>r.crit===sev).length, col=sevColor(sev);
-    return `<button class="sev-card" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${n.toLocaleString("fr-FR")}</b></span><span style="font-size:18px;color:${col}">→</span></button>`;
+    return `<button class="sev-card" data-sev="${sev}" style="--c:${col};--cbg:${col}18"><span class="sev-ico">${ico}</span><span style="flex:1"><small>${sev}</small><b>${fmtN(n)}</b></span><span style="font-size:18px;color:${col}">→</span></button>`;
   }).join("");
   $$("#pilSev .sev-card").forEach(b=>b.onclick=()=>{
     withPilMonth();
@@ -706,7 +709,7 @@ function renderTopAlerts(){
 function renderAlertTypes(){
   const counts={}; Object.keys(CFG.alerts).forEach(k=>counts[k]=0);
   baseFiltered().forEach(r=>visibleAlerts(r).forEach(a=>counts[a.c]++));
-  $("#alertTypes").innerHTML=Object.entries(CFG.alerts).filter(([k,d])=>d.on!==false&&!d.deleted&&(!F.alertTypes.length||F.alertTypes.includes(k))).map(([k,d])=>`<button class="alert-type ${S.alertFilter===k?"active":""}" data-t="${k}" style="--c:${d.c}" title="${esc(d.h)}"><small>${esc(d.ico||"•")} ${k} · ${d.sev}</small><b>${counts[k].toLocaleString("fr-FR")}</b><span>${esc(d.t)}</span></button>`).join("")||'<div class="empty-state"><b>Aucune alerte visible</b>Activez une règle dans Administration.</div>';
+  $("#alertTypes").innerHTML=Object.entries(CFG.alerts).filter(([k,d])=>d.on!==false&&!d.deleted&&(!F.alertTypes.length||F.alertTypes.includes(k))).map(([k,d])=>`<button class="alert-type ${S.alertFilter===k?"active":""}" data-t="${k}" style="--c:${d.c}" title="${esc(d.h)}"><small>${esc(d.ico||"•")} ${k} · ${d.sev}</small><b>${fmtN(counts[k])}</b><span>${esc(d.t)}</span></button>`).join("")||'<div class="empty-state"><b>Aucune alerte visible</b>Activez une règle dans Administration.</div>';
   $$("#alertTypes .alert-type").forEach(el=>el.onclick=()=>{ S.alertFilter=S.alertFilter===el.dataset.t?null:el.dataset.t; S.pageAlert=0; renderAlertTypes(); renderAlertTable(); });
 }
 function renderOverdue(){
@@ -719,7 +722,7 @@ function renderOverdue(){
     const n=counts[k]||0, ref=OVERDUE_REF_3009[k]??"—", ec=n-(OVERDUE_REF_3009[k]??n);
     const active=S.ovCat===k?" active":"";
     const ecTxt=ec===0?"= réf.":(ec>0?`+${ec}`:`${ec}`);
-    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${n.toLocaleString("fr-FR")}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">réf. 30/09 : ${ref} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
+    return `<button class="alert-type${active}" data-ov="${k}" style="--c:${d.c}" title="${esc(d.h)} — Seuil > ${OVERDUE.days[k]}j"><small>${d.ico} ${k} · ${d.sev}</small><b>${fmtN(n)}</b><span>${esc(d.t)}</span><small style="color:${ec===0?"#12805c":"#b45309"}">réf. 30/09 : ${ref} (${ecTxt}) • &gt;${OVERDUE.days[k]}j</small></button>`;
   }).join("");
   $$("#ovCards [data-ov]").forEach(el=>el.onclick=()=>{ S.ovCat=S.ovCat===el.dataset.ov?"":el.dataset.ov; const sel=$("#ovCat"); if(sel) sel.value=S.ovCat; S.ovPage=0; renderOverdue(); });
   // sélecteurs : choix reconstruits à chaque rendu pour rester cohérents avec le fichier chargé
@@ -773,10 +776,10 @@ function renderOverdue(){
   }
   // table dossiers
   const list=overdueFiltered();
-  $("#ovCount").textContent=list.length.toLocaleString("fr-FR")+" dossier(s)";
+  $("#ovCount").textContent=fmtN(list.length)+" dossier(s)";
   const pages=Math.max(1,Math.ceil(list.length/S.perPage)); S.ovPage=Math.min(S.ovPage,pages-1);
   const slice=list.slice(S.ovPage*S.perPage,(S.ovPage+1)*S.perPage);
-  $("#ovPagerInfo").textContent=`${list.length.toLocaleString("fr-FR")} dossier(s) • Page ${S.ovPage+1}/${pages}`;
+  $("#ovPagerInfo").textContent=`${fmtN(list.length)} dossier(s) • Page ${S.ovPage+1}/${pages}`;
   const q=norm(S.ovQ||"");
   $("#ovTable tbody").innerHTML=slice.map(({r,o})=>{const d=OVERDUE_DEFS[o.c];return `<tr data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td><span class="pill" style="border-color:${d.c};color:${d.c}"><b>${o.c}</b></span><br><small>${d.ico} ${esc(d.t.slice(0,18))}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td>${esc(o.miss)}<br><small style="color:#64748b">réf ${fmtD(o.ref)}</small></td><td><b class="late">${o.age}j</b></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${hiComment((r.comments||"").slice(0,140),q)||"<span style='color:#94a3b8'>—</span>"}</td></tr>`;}).join("")||(S.enriched.length?'<tr><td colspan="8"><div class="empty-state"><b>Aucun Overdue sur ce périmètre</b>Ajustez les seuils ou le COM.</div></td></tr>':'<tr><td colspan="8"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM ».</div></td></tr>');
   $$("#ovTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
@@ -790,7 +793,7 @@ function renderMain(){
   const rows=sortRows(filteredMain());
   const pages=Math.max(1,Math.ceil(rows.length/S.perPage)); S.pageMain=Math.min(S.pageMain,pages-1);
   const slice=rows.slice(S.pageMain*S.perPage,(S.pageMain+1)*S.perPage);
-  $("#dossierCount").textContent=rows.length.toLocaleString("fr-FR")+" dossier(s)";
+  $("#dossierCount").textContent=fmtN(rows.length)+" dossier(s)";
   $("#mainPagerInfo").textContent=`Page ${S.pageMain+1}/${pages}`;
   $("#mainTable tbody").innerHTML=slice.map(r=>`<tr class="${r.crit==="Critique"?"crit":""}" data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td>${pill(r.crit)}<br><small style="color:#64748b">${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b>${S.prefs.commentBadge&&r.comments?' <span class="cmt-dot" title="Commentaires disponibles — survolez pour les lire">💬</span>':""}<button class="star ${S.pins[r._i]?"on":""}" data-star="${r._i}" title="Épingler / désépingler">★</button><br><small style="color:#64748b">${esc(r.designation||"")}</small></td><td>${esc(r.com||"—")}<br><small style="color:#64748b">${esc(r.auteur||"")}</small></td><td>${esc((r.client||"").slice(0,26))}<br><small style="color:#64748b">${esc(r.sousCompte||"")}</small></td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td>${delayCell(r.delaiRTA,r.dateRTA)}</td><td><span class="pill ${r.dateArchivage?"ok":"grey"}">${esc(r.etape)}</span></td><td style="font-size:11.5px;color:#334155">V:${fmtD(r.dateValidation)}<br>D:${fmtD(r.dateDocs)} • N:${fmtD(r.dateNote)}<br>E:${fmtD(r.dateEnreg)} • B:${fmtD(r.dateBAE)}</td><td>${r.alerts.slice(0,3).map(a=>`<span class="pill ${ALERT_DEFS[a.c].sev==="Critique"?"crit":ALERT_DEFS[a.c].sev==="Haute"?"haute":"moy"}" title="${esc(a.d)}">${a.c}</span>`).join(" ")}${r.alerts.length>3?` <small>+${r.alerts.length-3}</small>`:""}</td></tr>`).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucun dossier avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » via 📤 Charger Excel ou glisser-déposer.</div></td></tr>');
   $$("#mainTable tbody tr[data-i]").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
@@ -799,7 +802,7 @@ function renderAlertTable(){
   const list=filteredAlerts();
   const pages=Math.max(1,Math.ceil(list.length/S.perPage)); S.pageAlert=Math.min(S.pageAlert,pages-1);
   const slice=list.slice(S.pageAlert*S.perPage,(S.pageAlert+1)*S.perPage);
-  $("#alertPagerInfo").textContent=`${list.length.toLocaleString("fr-FR")} alerte(s) • Page ${S.pageAlert+1}/${pages}`;
+  $("#alertPagerInfo").textContent=`${fmtN(list.length)} alerte(s) • Page ${S.pageAlert+1}/${pages}`;
   $("#alertTable tbody").innerHTML=slice.map(({r,a})=>{const d=ALERT_DEFS[a.c];return `<tr data-i="${r._i}" style="cursor:pointer" data-tip="${esc(tipHTML(r))}"><td>${pill(d.sev)}<br><small>${a.c} • ${r.score}</small></td><td><b>${esc(r.dossier||"—")}</b></td><td>${esc(r.com||"—")}</td><td>${esc((r.client||"").slice(0,24))}</td><td><b style="color:${d.c}">${a.c} — ${esc(d.t)}</b></td><td style="white-space:normal;min-width:220px">${esc(a.d)}</td><td>${delayCell(r.delaiETA,r.dateETA)}</td><td style="white-space:normal;min-width:200px;font-size:11.5px">${esc((r.comments||"").slice(0,140))}</td><td><button class="btn small" data-i="${r._i}">→</button></td></tr>`;}).join("")||(S.enriched.length?'<tr><td colspan="9"><div class="empty-state"><b>Aucune alerte avec ces filtres</b>Élargissez les critères ou réinitialisez les filtres globaux.</div></td></tr>':'<tr><td colspan="9"><div class="empty-state"><b>Aucune donnée chargée</b>Chargez votre export Excel « Dossiers par COM » pour voir les alertes.</div></td></tr>');
   $$("#alertTable tbody tr").forEach(tr=>tr.onclick=()=>openDrawer(+tr.dataset.i));
 }
@@ -1084,7 +1087,7 @@ async function applyCfgAndRerender(msg){
   if(S.alertFilter&&(!CFG.alerts[S.alertFilter]||CFG.alerts[S.alertFilter].on===false||CFG.alerts[S.alertFilter].deleted)) S.alertFilter=null;
   $("#pilotDate").value=CFG.pilot;
   if(S.rows.length){
-    S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Recalcul : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
+    S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Recalcul : ${fmtN(d)} / ${fmtN(t)}…`));
     fillSelects(); setImportState("loaded",S.fileName);
   }
   renderAll(); renderMethodo(); renderGuide(); renderAdmin();
@@ -1178,7 +1181,7 @@ function setupSettings(){
 }
 function renderComTiles(arr){
   $("#comPicker").innerHTML='<option value="">Choisir un COM</option>'+arr.map(a=>`<option value="${esc(a.k)}" ${a.k===S.selCom?"selected":""}>${esc(a.k)}</option>`).join("");
-  $("#comTiles").innerHTML=arr.map(a=>`<button class="com-tile ${S.selCom===a.k?"selected":""}" data-com-tile="${esc(a.k)}"><span class="com-tile-head"><b>${esc(a.k)}</b><span class="pill ${a.avg>=CFG.thHaute?"haute":"ok"}">${a.avg>=CFG.thHaute?"À traiter":"Sous contrôle"}</span></span><strong>${a.n.toLocaleString("fr-FR")} <small>dossiers</small></strong><span class="com-tile-stats"><span>${Math.round(a.rate*100)}% prioritaires</span><span>${Math.round(a.tArch*100)}% clôturés</span></span><span class="progress"><i style="width:${Math.round(a.tArch*100)}%;background:#12805c"></i></span><span class="com-tile-link">Ouvrir la fiche de pilotage →</span></button>`).join("");
+  $("#comTiles").innerHTML=arr.map(a=>`<button class="com-tile ${S.selCom===a.k?"selected":""}" data-com-tile="${esc(a.k)}"><span class="com-tile-head"><b>${esc(a.k)}</b><span class="pill ${a.avg>=CFG.thHaute?"haute":"ok"}">${a.avg>=CFG.thHaute?"À traiter":"Sous contrôle"}</span></span><strong>${fmtN(a.n)} <small>dossiers</small></strong><span class="com-tile-stats"><span>${Math.round(a.rate*100)}% prioritaires</span><span>${Math.round(a.tArch*100)}% clôturés</span></span><span class="progress"><i style="width:${Math.round(a.tArch*100)}%;background:#12805c"></i></span><span class="com-tile-link">Ouvrir la fiche de pilotage →</span></button>`).join("");
 }
 function renderComStatus(rows){
   const groups=[{label:"À traiter",color:"#d92d20",test:r=>r.crit==="Critique"||r.crit==="Haute"},{label:"En douane",color:"#2563eb",test:r=>["douane","factDouane","bae"].includes(r.etapeKey)},{label:"En livraison",color:"#e9730c",test:r=>["mise","retour"].includes(r.etapeKey)},{label:"À clôturer",color:"#ca8a04",test:r=>["factInt","validFinal","archivage"].includes(r.etapeKey)},{label:"Archivés",color:"#12805c",test:r=>!!r.dateArchivage}];
@@ -1295,7 +1298,7 @@ function cadreRows(){
     return true;
   }).map(r=>({...r,alerts:visibleAlerts(r).filter(a=>!types.length||types.includes(a.c))}));
 }
-function cadreRefresh(){ const rows=cadreRows(); $("#cadreInfo").innerHTML=`Périmètre : <b>${rows.length.toLocaleString("fr-FR")} dossiers</b> • ${rows.reduce((s,r)=>s+r.alerts.length,0)} alertes • ${rows.filter(r=>r.crit==="Critique").length} critiques • pilotage du ${fmtD(todayPilot())}`; }
+function cadreRefresh(){ const rows=cadreRows(); $("#cadreInfo").innerHTML=`Périmètre : <b>${fmtN(rows.length)} dossiers</b> • ${rows.reduce((s,r)=>s+r.alerts.length,0)} alertes • ${rows.filter(r=>r.crit==="Critique").length} critiques • pilotage du ${fmtD(todayPilot())}`; }
 function cadreBody(rows){
   const title=$("#cadreTitle").value||"Rapport de pilotage SPOT";
   const n=rows.length||1;
@@ -1311,7 +1314,7 @@ function cadreBody(rows){
   const pins=rows.filter(r=>S.pins[r._i]);
   const pinTable=`<table border="1" cellspacing="0" cellpadding="4"><tr><th>N° dossier</th><th>COM</th><th>Client</th><th>ETA</th><th>Étape</th><th>Note direction</th></tr>${pins.map(r=>`<tr><td>${esc(r.dossier||"—")}</td><td>${esc(r.com||"—")}</td><td>${esc(r.client||"—")}</td><td>${fmtD(r.dateETA)}</td><td>${esc(r.etape)}</td><td>${esc(S.notes[r._i]||"—")}</td></tr>`).join("")||"<tr><td colspan=6>Aucun dossier épinglé dans ce périmètre</td></tr>"}</table>`;
   const comsSel=[...$("#cadreCom").selectedOptions].map(o=>esc(o.value)).join(", ");
-  return `<h1>${esc(title)}</h1><p class="meta">Généré le ${new Date().toLocaleDateString("fr-FR")} • pilotage du ${fmtD(todayPilot())} • ${rows.length.toLocaleString("fr-FR")} dossiers${comsSel?" • COM : "+comsSel:""}</p>
+  return `<h1>${esc(title)}</h1><p class="meta">Généré le ${new Date().toLocaleDateString("fr-FR")} • pilotage du ${fmtD(todayPilot())} • ${fmtN(rows.length)} dossiers${comsSel?" • COM : "+comsSel:""}</p>
   <h2>1. Synthèse</h2><table border="1" cellspacing="0" cellpadding="4">${kpis.map(k=>`<tr><th>${k[0]}</th><td>${k[1]}</td></tr>`).join("")}</table>
   <h2>2. Répartition par criticité</h2><table border="1" cellspacing="0" cellpadding="4"><tr><th>Critique</th><th>Haute</th><th>Moyenne</th><th>OK</th></tr><tr><td>${crit}</td><td>${haute}</td><td>${moy}</td><td>${ok}</td></tr></table>
   <h2>3. Par COM</h2>${comTable}
@@ -1357,21 +1360,21 @@ function showMapping(headers,sampleRows,done){
   };
 }
 async function ingest(headers, body, fileName){
-  setImportState("loading",`Vérifiez les colonnes · ${body.length.toLocaleString("fr-FR")} lignes`);
+  setImportState("loading",`Vérifiez les colonnes · ${fmtN(body.length)} lignes`);
   showMapping(headers, body.slice(0,5), async mapping=>{
     S.headers=headers; S.mapping=mapping; S.fileName=fileName;
     try{ localStorage.setItem("spot_mapping",JSON.stringify(mapping)); localStorage.setItem("spot_file",fileName); }catch{}
     const t0=performance.now();
     // mapping puis analyse par blocs : tout est chargé, sans figer l'interface, sans limite de lignes
-    const mapped=await applyMappingAsync(headers, body, mapping, (d,t)=>setImportState("loading",`Lecture des lignes : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
+    const mapped=await applyMappingAsync(headers, body, mapping, (d,t)=>setImportState("loading",`Lecture des lignes : ${fmtN(d)} / ${fmtN(t)}…`));
     S.rows=mapped;
-    S.enriched=await enrichAllAsync(mapped, (d,t)=>setImportState("loading",`Analyse des alertes : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`));
+    S.enriched=await enrichAllAsync(mapped, (d,t)=>setImportState("loading",`Analyse des alertes : ${fmtN(d)} / ${fmtN(t)}…`));
     S.pilMonth=F.month;
     fillSelects(); S.pageMain=0; S.pageAlert=0; renderAll(); renderMethodo(); renderGuide(); renderAdmin();
     setImportState("loaded",fileName);
     try{ setImportState("loading","Sauvegarde locale…"); await IDB.put("dossiers",{fileName,rows:mapped}); setImportState("loaded",fileName); }
     catch{ setImportState("loaded",fileName); toast("⚠️ Volume important : données conservées pour cette session (sauvegarde locale saturée)."); }
-    toast(`✅ <b>${S.enriched.length.toLocaleString("fr-FR")} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
+    toast(`✅ <b>${fmtN(S.enriched.length)} dossiers</b> analysés en ${((performance.now()-t0)/1000).toFixed(1)}s — ${S.enriched.reduce((s,r)=>s+r.alerts.length,0)} alertes, ${S.enriched.filter(r=>r.crit==="Critique").length} critiques.`);
   });
 }
 function readFile(f){
@@ -1423,7 +1426,7 @@ function exportXLSX(name, rows){
     ws["!cols"]=[{wch:10},{wch:7},{wch:14},{wch:14},{wch:8},{wch:10},{wch:28},{wch:12},{wch:24},{wch:12},{wch:9},{wch:12},{wch:9},{wch:22},{wch:50},{wch:50},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:12}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"SPOT");
     XLSX.writeFile(wb,name);
-    toast(`⬇ <b>${esc(name)}</b> — export intégral : <b>${rows.length.toLocaleString("fr-FR")} lignes</b>, aucune troncature`);
+    toast(`⬇ <b>${esc(name)}</b> — export intégral : <b>${fmtN(rows.length)} lignes</b>, aucune troncature`);
   }catch(e){ console.error(e); toast("❌ Export XLSX impossible : "+e.message); }
 }
 /* ---------- E-mail situation par COM (100% local via messagerie) ---------- */
@@ -1586,7 +1589,7 @@ async function init(){
   $$("#mainTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortMain.dir=S.sortMain.k===k?-S.sortMain.dir:-1;S.sortMain.k=k;renderMain();});
   $$("#alertTable th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sortAlert.dir=-1;S.sortAlert.k=k;S.pageAlert=0;renderAlertTable();});
   $("#btnClearF").onclick=()=>{clearAllFilters();};
-  const fullToast=n=>`⬇ Export intégral : <b>${n.toLocaleString("fr-FR")} lignes</b> — aucune troncature`;
+  const fullToast=n=>`⬇ Export intégral : <b>${fmtN(n)} lignes</b> — aucune troncature`;
   $("#btnCsv").onclick=()=>{const r=filteredMain(); download("spot_dossiers_filtres.csv",toCSVParts(r),"text/csv"); toast(fullToast(r.length));};
   $("#btnXlsx").onclick=()=>exportXLSX("spot_dossiers_filtres.xlsx",filteredMain());
   $("#btnJson").onclick=()=>{const r=filteredMain(); download("spot_dossiers_filtres.json",JSON.stringify(r),"application/json"); toast(fullToast(r.length));};
@@ -1610,7 +1613,7 @@ async function init(){
     const saved=await IDB.get("dossiers");
     const mp=localStorage.getItem("spot_mapping"); if(mp) S.mapping=JSON.parse(mp);
     const fn=localStorage.getItem("spot_file");
-    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; setImportState("loading",`Analyse de ${saved.rows.length.toLocaleString("fr-FR")} lignes restaurées…`); S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Analyse : ${d.toLocaleString("fr-FR")} / ${t.toLocaleString("fr-FR")}…`)); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
+    if(saved&&saved.rows&&saved.rows.length){ S.rows=saved.rows; S.fileName=fn||saved.fileName||"restauré"; setImportState("loading",`Analyse de ${fmtN(saved.rows.length)} lignes restaurées…`); S.enriched=await enrichAllAsync(S.rows,(d,t)=>setImportState("loading",`Analyse : ${fmtN(d)} / ${fmtN(t)}…`)); fillSelects(); renderAll(); setImportState("loaded",S.fileName); }
     else { fillSelects(); renderAll(); setImportState("empty"); }
   }catch{ fillSelects(); renderAll(); }
   renderAll(); renderAdmin();
