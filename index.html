@@ -19,6 +19,7 @@
     <button class="nav-btn active" data-view="pilotage"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Pilotage mois</button>
     <button class="nav-btn" data-view="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Vue d'ensemble</button>
     <button class="nav-btn" data-view="alertes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Alertes <span class="count" id="navAlertCount">0</span></button>
+    <button class="nav-btn" data-view="overdue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Overdue <span class="count" id="navOverdueCount">0</span></button>
     <button class="nav-btn" data-view="dossiers"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Dossiers</button>
     <button class="nav-btn" data-view="epingles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>Épinglés <span class="count" id="navPinCount">0</span></button>
     <button class="nav-btn" data-view="evolution"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Évolution</button>
@@ -34,7 +35,7 @@
   <div class="topbar">
     <div>
       <h2 id="viewTitle">Vue d'ensemble</h2>
-      <select id="mobileNav" class="mobile-nav" aria-label="Naviguer vers une vue"><option value="pilotage">Pilotage du mois</option><option value="overview">Vue d’ensemble</option><option value="alertes">Alertes</option><option value="dossiers">Dossiers</option><option value="epingles">Épinglés</option><option value="evolution">Évolution</option><option value="perfs">Performance COM</option><option value="bu">Vision BU</option><option value="admin">Administration</option><option value="guide">Guide</option><option value="methodo">Méthodologie</option></select>
+      <select id="mobileNav" class="mobile-nav" aria-label="Naviguer vers une vue"><option value="pilotage">Pilotage du mois</option><option value="overview">Vue d’ensemble</option><option value="alertes">Alertes</option><option value="overdue">Overdue</option><option value="dossiers">Dossiers</option><option value="epingles">Épinglés</option><option value="evolution">Évolution</option><option value="perfs">Performance COM</option><option value="bu">Vision BU</option><option value="admin">Administration</option><option value="guide">Guide</option><option value="methodo">Méthodologie</option></select>
       <div class="sub" id="viewSub">Pilotage du jour — anomalies, écarts critiques, COM en difficulté</div>
     </div>
     <div class="top-actions">
@@ -149,6 +150,34 @@
       </div></div>
     </section>
 
+    <!-- OVERDUE / HINTERLAND -->
+    <section class="view" id="view-overdue">
+      <div class="card"><div class="card-h"><h3>🚨 Overdue Files Hinterland — 9 points de contrôle</h3><span class="hint">9 catégories • périmètre configurable • pilotage du <span id="ovPilot">—</span></span><span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn small" id="ovSnapshot">📸 Snapshot extraction</button><button class="btn small" id="ovExport">⬇ CSV Overdue</button><button class="btn small" id="ovExportX">⬇ XLSX</button></span></div>
+      <div class="card-b">
+        <p class="footer-note" style="margin:0 0 10px">Chaque point = <b>étape manquante + ancienneté &gt; seuil</b> vs date pilotage, sur le périmètre Hinterland (défaut : sous-métier 20C). Les seuils et le périmètre se règlent dans <b>Administration → Overdue</b>. Références 30/09 : BAE 0 • FactDouane 0 • Mise 15 • Déchargement 29 • Restitution 15 • Déclarés-sans-facture 160 • FactPrest 78 • Archivage 434 • Sans-déclaration 37.</p>
+        <div class="alert-types" id="ovCards"></div>
+        <div class="filters" style="grid-template-columns:repeat(4,1fr);margin-top:8px">
+          <div class="f-field"><label>COM</label><select id="ovCom"><option value="">Tous</option></select></div>
+          <div class="f-field"><label>Client</label><select id="ovClient"><option value="">Tous</option></select></div>
+          <div class="f-field"><label>Catégorie</label><select id="ovCat"><option value="">Toutes (L1…L9)</option></select></div>
+          <div class="f-field"><label>Sévérité</label><select id="ovSev"><option value="">Toutes</option><option>Critique</option><option>Haute</option><option>Moyenne</option></select></div>
+          <div class="f-field"><label>Recherche (n°, client…)</label><input id="ovSearch" placeholder="ex : 26306193, SONATAM…"></div>
+          <div class="f-field"><label>Ancienneté min (jours)</label><input type="number" id="ovMinAge" min="0" max="3650" placeholder="ex : 30"></div>
+          <div class="f-field"><label>ETA du … au …</label><div style="display:flex;gap:6px"><input type="date" id="ovEta1" style="width:100%"><input type="date" id="ovEta2" style="width:100%"></div></div>
+          <div class="f-field"><label>Tri / actions</label><div style="display:flex;gap:6px"><select id="ovSort" style="flex:1"><option value="age">Ancienneté ↓</option><option value="dossier">N° dossier</option><option value="com">COM</option><option value="client">Client</option></select><button class="btn small ghost" id="ovClear">Effacer</button></div></div>
+        </div>
+      </div></div>
+      <div class="panels" style="margin-top:12px">
+        <div class="card"><div class="card-h"><h3>📊 Suivi extractions — références vs fichier du jour</h3><span class="hint">Snapshots locaux • anciens à solder en priorité</span></div><div class="card-b"><div class="table-wrap"><table id="ovFollow"><thead><tr><th>Catégorie</th><th>Réf. 21/09</th><th>Réf. 30/09</th><th>Fichier du jour</th><th>Écart</th><th>Tendance</th></tr></thead><tbody></tbody></table></div><div class="table-wrap" style="margin-top:8px"><table id="ovSnaps"><thead><tr><th>Snapshot</th><th>Pilotage</th><th>Fichier</th><th>Total</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>L8</th><th>L9</th></tr></thead><tbody></tbody></table></div><p class="footer-note">Réf 21/09 : 8 • 1 • 32 • 17 • 21 • 154 • 42 • 423 • 43. Réf 30/09 : 0 • 0 • 15 • 29 • 15 • 160 • 78 • 434 • 37. Objectif : solder les plus anciens (2025 &amp; Jan–Août 2026) en priorité, qualifier les blocages (système / interfaces douanes / litiges clients). 📸 Snapshot = fige l'extraction du jour en local pour suivre l'avancement.</p></div></div>
+        <div class="card"><div class="card-h"><h3>👥 Par COM Hinterland</h3><span class="hint">Cliquez un COM → ses dossiers</span></div><div class="card-b"><div class="table-wrap" style="max-height:320px"><table id="ovComTable"><thead><tr><th>COM</th><th>Dos.</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>L8</th><th>L9</th></tr></thead><tbody></tbody></table></div></div></div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>🎯 Dossiers Overdue — les plus anciens d'abord <span id="ovCount" class="pill info">0</span></h3><span class="hint">Priorité 2025 + Jan–Août 2026 • survol = commentaires</span></div>
+      <div class="table-wrap" style="max-height:420px"><table id="ovTable"><thead><tr><th>Cat.</th><th>N° dossier</th><th>COM</th><th>Client</th><th>Étape manquante</th><th>Ancienneté</th><th>ETA</th><th>Commentaires</th></tr></thead><tbody></tbody></table></div>
+      <div class="pager"><span id="ovPagerInfo"></span><button class="btn small" id="ovPrev">←</button><button class="btn small" id="ovNext">→</button></div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="card-h"><h3>🧪 Ajustement des seuils — aligner le référentiel</h3><span class="hint">Ajustez puis 💾 dans Administration</span></div><div class="card-b"><div class="table-wrap"><table id="ovCalib"><thead><tr><th>Code</th><th>Règle</th><th>Seuil (j)</th><th>Fichier du jour</th><th>Réf. 30/09</th><th>Écart</th></tr></thead><tbody></tbody></table></div><p class="footer-note">Logique : L1 Enreg+Fact→BAE • L2 Enreg→Fact • L3 BAE→Mise (flux ETA ≤ fenêtre) • L4 Mise→Retour (flux ETA ≤ fenêtre) • L5 Mise→Retour sans FactInt • L6 Enreg→FactInt • L7 BAE→FactInt • L8 BAE→Archivage • L9 Valid→Enreg. Périmètre configurable. Les écarts &gt; 3 dossiers indiquent un seuil ou périmètre à ajuster, ou un blocage à qualifier.</p></div></div>
+    </section>
+
     <!-- DOSSIERS -->
     <section class="view" id="view-dossiers">
       <div class="filters" id="mainFilters">
@@ -242,6 +271,9 @@
         </div>
         <h4>⏱ SLA par transition (jours)</h4>
         <div class="filters" id="cfgSlaGrid" style="grid-template-columns:repeat(5,1fr);margin-top:0"></div>
+        <h4>🚨 Overdue — seuils par catégorie (jours) + périmètre Hinterland</h4>
+        <div class="filters" id="cfgOverdueGrid" style="grid-template-columns:repeat(5,1fr);margin-top:0"></div>
+        <div class="f-field" style="margin-top:8px;max-width:520px"><label>Périmètre Hinterland (sous-métiers, séparés par virgule — défaut 20C)</label><input id="cfgOverduePerim" placeholder="ex : 20C"></div>
         <details class="detail-section"><summary>Réglages détaillés de toutes les alertes</summary>
         <div class="table-wrap"><table id="cfgAlertTable" style="min-width:760px"><thead><tr><th>Code</th><th>Alerte</th><th>Active</th><th>Sévérité</th><th>Poids</th><th>Seuil (j)</th><th>Couleur</th></tr></thead><tbody></tbody></table></div>
         </details>
